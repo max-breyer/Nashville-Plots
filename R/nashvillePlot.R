@@ -46,9 +46,15 @@ get_gene_bounds_ensg <- function(ensg, map_df) {
 #' Read GWAS File
 #'
 #' @param file path to gwas results as obtained from plink --assoc
+#' @param samp a number between 0 and 1 describing what percecnt of entries with p-value > 0.1 to keep
 #' @export
-read_gwas_file <- function(file) {
+read_gwas_file <- function(file, samp = NULL) {
   gwas <- read.table(file, header=T)
+  if(!is.null(samp)) {
+    greater <- gwas[sample(which(gwas$P>0.1), round(samp*length(which(gwas$P>0.1)))), ]
+    lesser <- gwas[which(gwas$P<=0.1), ]
+    gwas <- rbind(lesser, greater)
+  }
   gwas.obj <- make.valid.object(CHR = gwas$CHR, P = gwas$P, BP = as.numeric(gwas$BP), group=file)
 }
 
@@ -176,7 +182,7 @@ plot.mh <- function(data, direction, draw_genes) {
 #' @param sig_line2_color color for sig_line2
 #' @param draw_genes draw lines along the length of each gene instead of a dot at the midpoint
 #' @param data1_direction direction for data1 to be drawn, 1 is up and -1 is down
-#' @importFrom ggplot2 ggplot aes theme_bw guides geom_hline guide_legend scale_x_continuous scale_y_continuous scale_colour_manual theme element_text element_line element_blank xlab ylab expand_limits geom_hline geom_point
+#' @importFrom ggplot2 ggplot aes theme_bw guides scale_color_identity geom_hline guide_legend scale_x_continuous scale_y_continuous scale_colour_manual theme element_text element_line element_blank xlab ylab expand_limits geom_hline geom_point
 #' @importFrom ggrepel geom_label_repel
 #' @export
 nashville.plot <- function(data1, data2 = NULL, data1_direction = 1, map_df = "37",
