@@ -590,16 +590,14 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     message(sprintf("axis_break_scale: %g", axis_break_scale))
     message(sprintf("logP range: [%g, %g]", min(full.obj$logP, na.rm=TRUE), max(full.obj$logP, na.rm=TRUE)))
 
-      #plt <- plt + scale_y_break(breaks = c(bottom_break - 0.01, bottom_break),
-      #                           scales = axis_break_scale,
-      #                           space = 0.0, symbol = "slash",
-      #                           expand = c(0,0))
-      #plt <- plt + scale_y_break(breaks = c(top_break, top_break + 0.01),
-      #                           scales = 1/axis_break_scale,
-      #                           space = 0.0, symbol = "slash",
-      #                           expand = c(0,0))
-    #plt <- plt + ggbreak::scale_y_break(c(2, 3))
-    #plt <- plt + ggbreak::scale_y_cut(breaks = c(-10, 10), which = c(1,3), scales = c(0.5, 0.5))
+      plt <- plt + scale_y_break(breaks = c(bottom_break - 0.01, bottom_break),
+                                scales = axis_break_scale,
+                                space = 0.0, symbol = "slash",
+                                expand = c(0,0))
+      plt <- plt + scale_y_break(breaks = c(top_break, top_break + 0.01),
+                                scales = 1/axis_break_scale,
+                                space = 0.0, symbol = "slash",
+                                expand = c(0,0))
   } else {
     stop("axis_breaks must be FALSE, or a numeric vector of length 1 or 2")
   }
