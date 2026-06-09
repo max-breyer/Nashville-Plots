@@ -221,7 +221,7 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
   temp <- data.frame(gene.name, group, CHR, BP, P, gene.start, gene.end, color, shape, datatype, snp.name)
   object <- merge(temp, config, by.x='group', by.y = 'V1', all.x=T)
   object$names <- object$V2
-  object[which(is.na(object$names)), "names"] <- object$group
+  object[which(is.na(object$names)), "names"] <- object[which(is.na(object$names)), "group"]
   object$V2 <- NULL
   object$V3 <- NULL
   #object[which(object$P == 0), "P"] <- .Machine$double.xmin
