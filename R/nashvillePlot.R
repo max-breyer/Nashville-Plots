@@ -616,7 +616,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   plt <- plt + theme(
     panel.border = element_blank(),
     axis.line = element_line(color = "black"),
-    panel.spacing = unit(0, "pt")
+    panel.spacing = ggplot2::unit(0, "pt")
   )
   plt
 }
