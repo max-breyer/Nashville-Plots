@@ -1,8 +1,5 @@
 suppressPackageStartupMessages(library(ggplot2))
-suppressPackageStartupMessages(library(data.table))
-#suppressPackageStartupMessages(library(ggbreak))
-
-
+#suppressPackageStartupMessages(library(data.table))
 
 #' Read config file
 #'
@@ -104,6 +101,10 @@ read_gwas_file <- function(file, config=data.frame(V1=NA,V2=NA,V3=NA), samp = NU
     lesser <- lesser[which(lesser[[p]] < 0.5), ]
     gwas <- rbind(lesser, greater)
   }
+  snp.values <- rep(NA_character_, nrow(gwas))
+  if (!is.na(snp.name) && snp.name %in% names(gwas)) {
+    snp.values <- gwas[[snp.name]]
+  }
   gwas.obj <- make.valid.object(CHR = as.numeric(gwas[[chr]]),
                                 P = as.numeric(gwas[[p]]),
                                 BP = as.numeric(gwas[[bp]]),
@@ -112,7 +113,7 @@ read_gwas_file <- function(file, config=data.frame(V1=NA,V2=NA,V3=NA), samp = NU
                                 shape=shape,
                                 datatype="gwas",
                                 config=config,
-                                snp.name = gwas[[snp.name]])
+                                snp.name = snp.values)
   gwas.obj
 }
 #' Read MetaXcan Folder
@@ -133,9 +134,12 @@ read_metaXcan_folder <-  function(directory, config=data.frame(V1=NA,V2=NA,V3=NA
     stop("map_df must be '37' or '38'")
   }
   files <- list.files(directory, pattern=pattern)
+  if (length(files) == 0) {
+    stop(paste0("No files matching pattern '", pattern, "' found in ", directory))
+  }
   tissues <- data.frame()
-  for (i in 1:length(files)){
-    tissue_file <- read.csv(file=as.character(paste0(directory, files[i])), header = TRUE)
+  for (i in seq_along(files)){
+    tissue_file <- read.csv(file=file.path(directory, files[i]), header = TRUE)
     tissue_file$dtype <- files[i]
     tissues <- rbind(tissues, tissue_file)
   }
@@ -178,10 +182,14 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
   ifelse(all(is.numeric(BP)) | all(is.na(BP)), NA, stop("BP must be numeric"))
   ifelse(all(is.numeric(gene.start)) | all(is.na(gene.start)), NA, stop("gene.start must be numeric"))
   ifelse(all(is.numeric(gene.end)) | all(is.na(gene.end)), NA, stop("gene.end must be numeric"))
-  ifelse(length(color) != length(P) | length(color) != 1, NA, stop("color must be the same length as P or a single value"))
-  ifelse(length(shape) != length(P) | length(shape) != 1, NA, stop("shape must be the same length as P or a single value"))
-  #  ifelse(any(P == 0), NA, message(paste0("Warning: Removing ", length(which(P == 0)), " rows with P-value = 0")))
-  #ifelse(any(P == 0), message(paste0("Warning: Removing ", length(which(P == 0)), " rows with P-value = 0")), NA)
+  if (length(color) != 1 && length(color) != length(P)) {
+    stop("color must be the same length as P or a single value")
+  }
+  if (length(shape) != 1 && length(shape) != length(P)) {
+    stop("shape must be the same length as P or a single value")
+  }
+  # ifelse(any(P == 0), NA, message(paste0("Warning: Removing ", length(which(P == 0)), " rows with P-value = 0")))
+  # ifelse(any(P == 0), message(paste0("Warning: Removing ", length(which(P == 0)), " rows with P-value = 0")), NA)
 
   #make sure that either BP or gene.start+gene.end exists
   if(all(is.na(gene.start)) && all(is.na(gene.end))) {
@@ -193,13 +201,13 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
   }
 
   #set color if not provided
-  if(any(is.na(color)) & datatype == "gwas") {
+  if(any(is.na(color)) && identical(datatype, "gwas")) {
     #group_color <- unname(Polychrome::createPalette(length(unique(CHR)),  c('#000000', '#aaaaaa', "#ff0000", "#00ff00", "#0000ff")))
     group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Paired"))(length(unique(CHR)))
     color <- as.factor((CHR %% 2))
     color <- group_color[as.numeric(color)]
   } else
-    if(any(is.na(color)) & datatype == "meta") {
+    if(any(is.na(color)) && identical(datatype, "meta")) {
       group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Set3"))(length(unique(group)))
       color <- as.factor(group)
       color <- group_color[as.numeric(color)]
@@ -229,7 +237,7 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
 #' @importFrom ggplot2 ggplot aes geom_point
 plot.mh <- function(data, direction, draw_genes) {
 
-  if(draw_genes & any(!is.na(data$gene.name) & any(!is.na(data$group)))) {
+  if(draw_genes && any(!is.na(data$gene.name)) && any(!is.na(data$group))) {
     data_copy <- data
     data_copy$gene.start <- data_copy$gene.end
     data <- rbind(data, data_copy)
@@ -253,8 +261,9 @@ plot.mh <- function(data, direction, draw_genes) {
 determine_abs_position <- function(full.obj) {
   max_pos <- tapply(full.obj[["BP"]], full.obj[["CHR"]], max)
   chr_shift <- head(c(0,cumsum(as.numeric(max_pos))),-1)
+  names(chr_shift) <- names(max_pos)
   if (all(chr_shift==0)) {
-    chr_shift <- rep(0, times=max(full.obj$CHR))
+    chr_shift <- setNames(rep(0, length(max_pos)), names(max_pos))
   }
   chr_shift
 }
@@ -375,7 +384,10 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                            config=data.frame(V1=NA,V2=NA,V3=NA), y_min=NA, y_max=NA, y_ticks=NA,
                            data1_direction="up", axis_breaks = FALSE, axis_break_scale = 5, ...) {
     validate_axis_breaks <- function(axis_breaks, full.obj) {
-    if (identical(axis_breaks, FALSE) || length(axis_breaks) == 0) return(invisible(NULL))
+      if (identical(axis_breaks, FALSE) || identical(axis_breaks, "auto") || length(axis_breaks) == 0) return(invisible(NULL))
+      if (!is.numeric(axis_breaks)) {
+        stop("axis_breaks must be FALSE, 'auto', or a numeric vector of length 1 or 2", call. = FALSE)
+      }
 
     logP_range <- range(full.obj$logP, na.rm = TRUE)
     data_min   <- logP_range[1]
@@ -403,7 +415,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                    "38" = {map_df = gene.build.38},
                    stop("map_df must be '37' or '38'"))
   data1$datasource <- 1
-  data2$datasource <- 2
+  if (!is.null(data2)) { data2$datasource <- 2 }
   full.obj <- rbind(data1, data2)
   full.obj <- merge(full.obj, config, by.x="group", by.y="V2", all.x = TRUE)
   chr_shift <- determine_abs_position(full.obj)
@@ -453,9 +465,9 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   #### handle breaks here
   if(is.numeric(axis_breaks)) {
     message("using manual breaks")
-  } else if(axis_breaks == 'auto') {
-    axis_breaks <- c(find_y_break(full.obj[which(full.obj$datasource == 1), "logP"]),
-                     find_y_break(full.obj[which(full.obj$datasource == 2), "logP"]))
+  } else if(identical(axis_breaks, 'auto')) {
+    axis_breaks <- unlist(c(find_y_break(full.obj[which(full.obj$datasource == 1), "logP"]),
+                            find_y_break(full.obj[which(full.obj$datasource == 2), "logP"])))
   } else {
     axis_breaks = NULL
     message('no break')
@@ -568,13 +580,13 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     # below 0 → bottom segment compressed, use scale as-is
     # above 0 → top segment compressed, invert the scale
     if (axis_breaks < 0) {
-      plt <- plt + safe_y_break(
+      plt <- plt + scale_y_break(
         breaks = c(axis_breaks, axis_breaks + 0.01),
         scales = axis_break_scale,
         space  = 0.0, symbol = "slash", expand = c(0,0)
       )
     } else {
-      plt <- plt + safe_y_break(
+      plt <- plt + scale_y_break(
         breaks = c(axis_breaks, axis_breaks + 0.01),
         scales = 1 / axis_break_scale,
         space  = 0.0, symbol = "slash", expand = c(0,0)
