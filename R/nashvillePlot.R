@@ -534,7 +534,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   plt <- plt + scale_color_identity("Tissue", guide = "legend",
                                     labels = full.obj$name,
                                     breaks = full.obj$color)
-  plt <- plt + guides(shape = "none",
+  plt <- plt + ggplot2::guides(shape = "none",
                       size = "none",
                       colour = guide_legend(override.aes = list(size=6)))
   if(!is.null(sig_line1)) {
