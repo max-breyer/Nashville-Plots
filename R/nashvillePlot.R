@@ -424,13 +424,13 @@ find_y_break <- function(log10p_vals,
 #' @param zoom_gene: if `chr` is set this will graph around the gene described by name
 #' @param zoom_left: if `chr` is set this will graph points to the right of this base pair number
 #' @param zoom_right: if `chr` is set this will graph points to the left of this base pair number
-#'   @param tag_genes1 character vector of gene names (or group/tissue names for GWAS SNPs)
+#'   @param tag_names1 character vector of gene names (or group/tissue names for GWAS SNPs)
 #'     in data1 to label on the plot, regardless of significance
-#'   @param tag_genes2 character vector of gene names (or group/tissue names for GWAS SNPs)
+#'   @param tag_names2 character vector of gene names (or group/tissue names for GWAS SNPs)
 #'     in data2 to label on the plot, regardless of significance
-#'  @param gene_tag1 numeric, in data1 annotate items with P-values more extreme than gene_tag1
+#'  @param tag_threshold1 numeric, in data1 annotate items with P-values more extreme than tag_threshold1
 #'    (default -Inf, i.e. no automatic threshold tagging)
-#'   @param gene_tag2 numeric, in data2 annotate items with P-values more extreme than gene_tag2
+#'   @param tag_threshold2 numeric, in data2 annotate items with P-values more extreme than tag_threshold2
 #'     (default -Inf, i.e. no automatic threshold tagging)
 #' @param sig_line1 numeric, draw a horizontal line at -log(sig_line1)
 #' @param sig_line2 numeric, draw a horizontal line at -log(sig_line2)
@@ -452,8 +452,8 @@ find_y_break <- function(log10p_vals,
  #TODO check the gene_tag code make sure it works for each side independantly
 nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=NULL, zoom_gene=NULL,
                            zoom_left=0, zoom_right=Inf,
-                           tag_genes1=NULL, tag_genes2=NULL,
-                           gene_tag1=-Inf, gene_tag2=-Inf,
+                           tag_names1=NULL, tag_names2=NULL,
+                           tag_threshold1=-Inf, tag_threshold2=-Inf,
                            sig_line1=NULL, sig_line2=NULL,
                            sig_line1_color='black', sig_line2_color='black', draw_genes=FALSE,
                            config=data.frame(V1=NA,V2=NA,V3=NA), y_min=NA, y_max=NA, y_ticks=NA,
@@ -575,8 +575,8 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   # if names is empty and snp: try:
   # 3) if snp, by locus "peaks"
 
-  tag1 <- build_tag_subset(full.obj[which(full.obj$datasource == 1), ], tag_genes1, gene_tag1)
-  tag2 <- build_tag_subset(full.obj[which(full.obj$datasource == 2), ], tag_genes2, gene_tag2)
+  tag1 <- build_tag_subset(full.obj[which(full.obj$datasource == 1), ], tag_names1, tag_threshold1)
+  tag2 <- build_tag_subset(full.obj[which(full.obj$datasource == 2), ], tag_names2, tag_threshold2)
 
   for_tag <- rbind(tag1, tag2)
 
