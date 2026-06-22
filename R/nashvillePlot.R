@@ -6,7 +6,19 @@ suppressPackageStartupMessages(library(ggplot2))
 #' @param file a file path to a 3 column tab separated values file without headers where the first column contains file names, the second column contains group names, and the 3rd column contains colors for those groups to be plotted in.
 #' @export
 read_config <- function(file) {
-  config <- read.table(file, header=FALSE, stringsAsFactors = FALSE)
+  lines <- readLines(file)
+  lines <- lines[nzchar(trimws(lines))]  # drop blank lines
+
+  parsed <- lapply(lines, function(ln) {
+    parts <- strsplit(trimws(ln), "\\s+")[[1]]
+    v1 <- if (length(parts) >= 1) parts[1] else NA_character_
+    v2 <- if (length(parts) >= 2) parts[2] else NA_character_
+    v3 <- if (length(parts) >= 3) parts[3] else NA_character_
+    data.frame(V1 = v1, V2 = v2, V3 = v3, stringsAsFactors = FALSE)
+  })
+
+  config <- do.call(rbind, parsed)
+
   if (length(unique(config$V2)) != length(config$V2)) {
     stop("Each element of the group column must be unique.")
   }
@@ -171,19 +183,87 @@ read_metaXcan_folder <-  function(directory, config=data.frame(V1=NA,V2=NA,V3=NA
 #' @param gene.end numeric column of base pair locations for the end of a gene
 #' @param group label for plotting, often this will be a tissue name
 #' @param gene.name name of each gene, this will be shown for P values greater than the tag threshold
+# make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.end=NA, gene.name=NA, color=NA, shape=NA, snp.name = NA, datatype=NA) {
+#   ifelse(all(is.numeric(CHR)), NA, stop("CHR must be numeric"))
+#   ifelse(all(is.numeric(P)), NA, stop("P must be numeric"))
+#   ifelse(all(is.numeric(BP)) | all(is.na(BP)), NA, stop("BP must be numeric"))
+#   ifelse(all(is.numeric(gene.start)) | all(is.na(gene.start)), NA, stop("gene.start must be numeric"))
+#   ifelse(all(is.numeric(gene.end)) | all(is.na(gene.end)), NA, stop("gene.end must be numeric"))
+#   #if (length(color) != 1 && length(color) != length(P)) {
+#   #  stop("color must be the same length as P or a single value")
+#   #}
+#   if (length(shape) != 1 && length(shape) != length(P)) {
+#     stop("shape must be the same length as P or a single value")
+#   }
+#
+#   #make sure that either BP or gene.start+gene.end exists
+#   if(all(is.na(gene.start)) && all(is.na(gene.end))) {
+#     stopifnot(is.numeric(BP))
+#   }
+#   if(all(is.na(BP))) {
+#     stopifnot(is.numeric(gene.start) && is.numeric(gene.end))
+#     BP <- (gene.start + gene.end)/2  # TODO this should be delivered from map_df
+#   }
+#
+#
+#   if(!any(is.na(color)) && identical(datatype, "gwas") && length(color) != 1 && length(color) != length(CHR)) {
+#     group_color <- color
+#     color <- group_color[(CHR-1) %% length(group_color)+1]
+#   }
+#
+#   #set color if not provided
+#   if(any(is.na(color)) && identical(datatype, "gwas")) {
+#     #group_color <- unname(Polychrome::createPalette(length(unique(CHR)),  c('#000000', '#aaaaaa', "#ff0000", "#00ff00", "#0000ff")))
+#     group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Paired"))(length(unique(CHR)))
+#     color <- as.factor((CHR %% 2))
+#     color <- group_color[as.numeric(color)]
+#   } else
+#     if(any(is.na(color)) && identical(datatype, "meta")) {
+#       group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Set3"))(length(unique(group)))
+#       color <- as.factor(group)
+#       color <- group_color[as.numeric(color)]
+#     }
+#
+#   #set shape if not provided
+#   if(any(is.na(shape))) {
+#     shape <- as.factor(CHR %% 2)
+#   }
+#
+#   temp <- data.frame(gene.name, group, CHR, BP, P, gene.start, gene.end, color, shape, datatype, snp.name)
+#   object <- merge(temp, config, by.x='group', by.y = 'V1', all.x=T)
+#   object$names <- object$V2
+#   object[which(is.na(object$names)), "names"] <- object[which(is.na(object$names)), "group"]
+#   object$V2 <- NULL
+#   object$V3 <- NULL
+#   object[which(object$P != 0), ]
+# }
+
+
+
+
+
+
+#############
+#############
+#' Builds an object ready to plot
+#'
+#' This function take data.frame columns and returns an object ready to plot with nashville.plot()
+#' @param CHR numeric column of chromosome numbers
+#' @param P numeric column of P values to be plotted
+#' @param BP numeric column of base pair locations within a chromosome, either this or gene.start and gene.end are required
+#' @param gene.start numeric column of base pair locations for the start of a gene
+#' @param gene.end numeric column of base pair locations for the end of a gene
+#' @param group label for plotting, often this will be a tissue name
+#' @param gene.name name of each gene, this will be shown for P values greater than the tag threshold
 make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.end=NA, gene.name=NA, color=NA, shape=NA, snp.name = NA, datatype=NA) {
   ifelse(all(is.numeric(CHR)), NA, stop("CHR must be numeric"))
   ifelse(all(is.numeric(P)), NA, stop("P must be numeric"))
   ifelse(all(is.numeric(BP)) | all(is.na(BP)), NA, stop("BP must be numeric"))
   ifelse(all(is.numeric(gene.start)) | all(is.na(gene.start)), NA, stop("gene.start must be numeric"))
   ifelse(all(is.numeric(gene.end)) | all(is.na(gene.end)), NA, stop("gene.end must be numeric"))
-  #if (length(color) != 1 && length(color) != length(P)) {
-  #  stop("color must be the same length as P or a single value")
-  #}
   if (length(shape) != 1 && length(shape) != length(P)) {
     stop("shape must be the same length as P or a single value")
   }
-
   #make sure that either BP or gene.start+gene.end exists
   if(all(is.na(gene.start)) && all(is.na(gene.end))) {
     stopifnot(is.numeric(BP))
@@ -193,23 +273,16 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
     BP <- (gene.start + gene.end)/2  # TODO this should be delivered from map_df
   }
 
-  if(!any(is.na(color)) && identical(datatype, "gwas") && length(color) != 1 && length(color) != length(CHR)) {
-    group_color <- color
-    color <- group_color[(CHR-1) %% length(group_color)+1]
-  }
-
-  #set color if not provided
-  if(any(is.na(color)) && identical(datatype, "gwas")) {
-    #group_color <- unname(Polychrome::createPalette(length(unique(CHR)),  c('#000000', '#aaaaaa', "#ff0000", "#00ff00", "#0000ff")))
+  # Step 1: auto-assign a color to every row based on group/CHR
+  if (identical(datatype, "gwas")) {
     group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Paired"))(length(unique(CHR)))
-    color <- as.factor((CHR %% 2))
-    color <- group_color[as.numeric(color)]
-  } else
-    if(any(is.na(color)) && identical(datatype, "meta")) {
-      group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Set3"))(length(unique(group)))
-      color <- as.factor(group)
-      color <- group_color[as.numeric(color)]
-    }
+    color <- group_color[as.numeric(as.factor(CHR %% 2))]
+  } else if (identical(datatype, "meta")) {
+    group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Set3"))(length(unique(group)))
+    color <- group_color[as.numeric(as.factor(group))]
+  }
+  # Step 2: override with user-supplied colors from config where V3 is non-NA/non-empty.
+  # Applied after auto-colors so only explicitly specified rows are overridden.
 
   #set shape if not provided
   if(any(is.na(shape))) {
@@ -220,10 +293,39 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
   object <- merge(temp, config, by.x='group', by.y = 'V1', all.x=T)
   object$names <- object$V2
   object[which(is.na(object$names)), "names"] <- object[which(is.na(object$names)), "group"]
+
+  # Override auto-assigned colors with any user-supplied colors from config (V3)
+  has_user_color <- !is.na(object$V3) & nzchar(trimws(object$V3))
+  if (any(has_user_color)) {
+    # Work group-by-group so each group's palette is applied independently
+    for (grp in unique(object$group[has_user_color])) {
+      grp_rows <- object$group == grp & has_user_color
+      palette  <- trimws(strsplit(object$V3[grp_rows][1], ",")[[1]])
+      chr_vals <- object$CHR[grp_rows]
+      # Map CHR to palette index: CHR 1->1, 2->2, ..., wrapping by palette length
+      object$color[grp_rows] <- palette[(chr_vals - 1) %% length(palette) + 1]
+    }
+  }
+
+
   object$V2 <- NULL
   object$V3 <- NULL
   object[which(object$P != 0), ]
 }
+
+
+#############
+#############
+
+
+
+
+
+
+
+
+
+
 
 #' plot manhattan
 #'
@@ -244,7 +346,8 @@ plot.mh <- function(data, direction, draw_genes) {
                         color=color,
                         group=interaction(gene.name, group)))
   } else {
-    mh <- geom_point(data=data,#  |> sample_n(size = nrow(df), replace = FALSE), # the sampling is done to randomize the order of rows to mix colors better
+    # data[sample(1:nrow(data)), ]
+    mh <- geom_point(data=data[sample(1:nrow(data)), ],#  |> sample_n(size = nrow(df), replace = FALSE), # the sampling is done to randomize the order of rows to mix colors better
                      aes(x=absolute,
                          y=direction * -log(P, 10),
                          color=color,
@@ -328,7 +431,7 @@ find_y_break <- function(log10p_vals,
 #' @param gene_tag numeric P-value threshold; rows with P < gene_tag are tagged
 #' @param peak_window x range to be considered a "peak". Only 1 point will be labeled for
 #'  crossing the threshold in each peak window.
-  build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
+build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
 
     if (nrow(obj) == 0) return(obj[0, , drop = FALSE])
 
@@ -413,13 +516,13 @@ find_y_break <- function(log10p_vals,
 #' @param zoom_gene: if `chr` is set this will graph around the gene described by name
 #' @param zoom_left: if `chr` is set this will graph points to the right of this base pair number
 #' @param zoom_right: if `chr` is set this will graph points to the left of this base pair number
-#'   @param tag_names1 character vector of gene names (or group/tissue names for GWAS SNPs)
+#' @param tag_names1 character vector of gene names (or group/tissue names for GWAS SNPs)
 #'     in data1 to label on the plot, regardless of significance
-#'   @param tag_names2 character vector of gene names (or group/tissue names for GWAS SNPs)
+#' @param tag_names2 character vector of gene names (or group/tissue names for GWAS SNPs)
 #'     in data2 to label on the plot, regardless of significance
-#'  @param tag_threshold1 numeric, in data1 annotate items with P-values more extreme than tag_threshold1
+#' @param tag_threshold1 numeric, in data1 annotate items with P-values more extreme than tag_threshold1
 #'    (default -Inf, i.e. no automatic threshold tagging)
-#'   @param tag_threshold2 numeric, in data2 annotate items with P-values more extreme than tag_threshold2
+#' @param tag_threshold2 numeric, in data2 annotate items with P-values more extreme than tag_threshold2
 #'     (default -Inf, i.e. no automatic threshold tagging)
 #' @param sig_line1 numeric, draw a horizontal line at -log(sig_line1)
 #' @param sig_line2 numeric, draw a horizontal line at -log(sig_line2)
@@ -433,12 +536,11 @@ find_y_break <- function(log10p_vals,
 #' @param data1_direction direction for data1 to be drawn, "up" or "down"
 #' @param axis_break_scale multiplier for middle chunk of the plot if there is an axis_break
 #' @param axis_breaks where to cut the y-axis for shrinking extremes of the plot,
-#'                   accepts FALSE, 'auto', or a list of y values of places to adjust the relative scale
+#'  accepts FALSE, 'auto', or a list of y values of places to adjust the relative scale
 #' @importFrom ggplot2 ggplot aes theme_bw guides geom_hline guide_legend scale_x_continuous scale_y_continuous scale_colour_manual theme element_text element_line element_blank xlab ylab expand_limits geom_hline geom_point
 #' @importFrom ggrepel geom_label_repel
 #' @export
 
- #TODO check the gene_tag code make sure it works for each side independantly
 nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=NULL, zoom_gene=NULL,
                            zoom_left=0, zoom_right=Inf,
                            tag_names1=NULL, tag_names2=NULL,
