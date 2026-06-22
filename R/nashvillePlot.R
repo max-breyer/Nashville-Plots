@@ -24,10 +24,6 @@ chr_as_numeric <- function(chr) {
   as.numeric(chr)
 }
 
-
-
-
-
 #' Get gene bounds
 #'
 #' Determines boundaries for plotting a gene by gene name
@@ -182,14 +178,12 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
   ifelse(all(is.numeric(BP)) | all(is.na(BP)), NA, stop("BP must be numeric"))
   ifelse(all(is.numeric(gene.start)) | all(is.na(gene.start)), NA, stop("gene.start must be numeric"))
   ifelse(all(is.numeric(gene.end)) | all(is.na(gene.end)), NA, stop("gene.end must be numeric"))
-  if (length(color) != 1 && length(color) != length(P)) {
-    stop("color must be the same length as P or a single value")
-  }
+  #if (length(color) != 1 && length(color) != length(P)) {
+  #  stop("color must be the same length as P or a single value")
+  #}
   if (length(shape) != 1 && length(shape) != length(P)) {
     stop("shape must be the same length as P or a single value")
   }
-  # ifelse(any(P == 0), NA, message(paste0("Warning: Removing ", length(which(P == 0)), " rows with P-value = 0")))
-  # ifelse(any(P == 0), message(paste0("Warning: Removing ", length(which(P == 0)), " rows with P-value = 0")), NA)
 
   #make sure that either BP or gene.start+gene.end exists
   if(all(is.na(gene.start)) && all(is.na(gene.end))) {
@@ -198,6 +192,14 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
   if(all(is.na(BP))) {
     stopifnot(is.numeric(gene.start) && is.numeric(gene.end))
     BP <- (gene.start + gene.end)/2  # TODO this should be delivered from map_df
+  }
+
+  #TODO if multiple colors provided for datatype == gwas then
+  # alternate them by chromosome
+  #e.g. c("#E5EC9A" "#F2EC84" "#FFED6F") would do #E5EC9A for colors 1,4,7 etc
+  if(!any(is.na(color)) && identical(datatype, "gwas") && length(color) != 1 && length(color) != length(CHR)) {
+    group_color <- color
+    color <- group_color[(CHR-1) %% length(group_color)+1]
   }
 
   #set color if not provided
@@ -241,16 +243,17 @@ plot.mh <- function(data, direction, draw_genes) {
     data_copy <- data
     data_copy$gene.start <- data_copy$gene.end
     data <- rbind(data, data_copy)
-    mh <- geom_line(data = data, aes(x=gene.start,
-                                     y=direction * -log(P, 10),
-                                     color=color,
-                                     group=interaction(gene.name, group)))
-  }
-  else {
-    mh <- geom_point(data=data, aes(x=absolute,
-                                    y=direction * -log(P, 10),
-                                    color=color,
-                                    shape=as.factor(CHR %% 2)))
+    mh <- geom_line(data = data,
+                    aes(x=gene.start,
+                        y=direction * -log(P, 10),
+                        color=color,
+                        group=interaction(gene.name, group)))
+  } else {
+    mh <- geom_point(data=data,#  |> sample_n(size = nrow(df), replace = FALSE), # the sampling is done to randomize the order of rows to mix colors better
+                     aes(x=absolute,
+                         y=direction * -log(P, 10),
+                         color=color,
+                         shape=as.factor(CHR %% 2)))
   }
 }
 
@@ -278,27 +281,6 @@ to_megabase <- function(df) {
   df$gene.end <- df$gene.end * 1e-6
   df$BP <- df$BP * 1e-6
   df
-}
-
-if (FALSE) {
-  data1 = meta
-  data2 = gwas
-  gene_tag = 1e-6
-  data1_direction = "up"
-  sig_line1 = 5e-7
-  sig_line2 = 5e-8
-  map_df = "38"
-  chr=10
-  zoom_gene = "BICC1"
-  draw_genes = TRUE
-  zoom_ensg=NULL
-  zoom_left = 0
-  zoom_right = Inf
-  group_color=NULL
-  sig_line1 = NULL
-  sig_line2 = NULL
-  sig_line1_color = 'black'
-  sig_line2_color = 'black'
 }
 
 find_y_break <- function(log10p_vals,
@@ -348,6 +330,87 @@ find_y_break <- function(log10p_vals,
   list(break_lo, break_hi)
 }
 
+#' Build a tag subset for one data source
+#'
+#' @param obj subset of full.obj belonging to a single datasource
+#' @param tag_genes character vector of gene names (matched against obj$gene.name)
+#'   or SNP/group names (matched against obj$names) to force-tag
+#' @param gene_tag numeric P-value threshold; rows with P < gene_tag are tagged
+#' @param peak_window x range to be considered a "peak". Only 1 point will be labeled for
+#'  crossing the threshold in each peak window.
+  build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
+
+    if (nrow(obj) == 0) return(obj[0, , drop = FALSE])
+
+    has_gene <- !is.na(obj$gene.name)
+    has_name <- !is.na(obj$names)
+
+    # rows matching user-supplied list of items to tag
+    list_hit <- rep(FALSE, nrow(obj))
+    if (!is.null(tag_genes) && length(tag_genes) > 0) {
+      list_hit <- (has_gene & obj$gene.name %in% tag_genes) |
+        (has_name & obj$names %in% tag_genes)
+    }
+
+    # rows exceeding the significance threshold
+    thresh_hit <- rep(FALSE, nrow(obj))
+    if (is.numeric(gene_tag) && length(gene_tag) == 1 && !is.na(gene_tag)) {
+      thresh_hit <- !is.na(obj$P) & obj$P < gene_tag & (has_gene | has_name)
+    }
+
+    keep <- list_hit | thresh_hit
+    for_tag <- obj[keep, , drop = FALSE]
+
+    if (nrow(for_tag) == 0) return(for_tag)
+
+    # order so the most significant hit per gene is kept first, then dedupe
+    for_tag <- for_tag[order(for_tag$gene.name, -log(for_tag$P, 10), decreasing = TRUE), ]
+    for_tag <- for_tag[!duplicated(for_tag[, c("gene.name", "snp.name")]), ]
+
+    # Sort by significance so the top hit per region comes first
+    for_tag <- for_tag[order(for_tag$P), ]
+
+    kept <- rep(FALSE, nrow(for_tag))
+    peak_regions <- data.frame(chr = character(), start = numeric(), end = numeric())
+
+    for (i in seq_len(nrow(for_tag))) {
+      row <- for_tag[i, ]
+
+      # Named hits are always kept regardless of proximity to a peak
+      is_named <- !is.null(tag_genes) && length(tag_genes) > 0 &&
+        ((!is.na(row$gene.name) && row$gene.name %in% tag_genes) |
+           (!is.na(row$names)     && row$names     %in% tag_genes))
+
+      if (is_named) {
+        kept[i] <- TRUE
+        next
+      }
+
+      # Check if this variant falls within an already-claimed peak window
+      if (nrow(peak_regions) > 0) {
+        in_peak <- peak_regions$chr == row$CHR &
+          peak_regions$start <= row$BP &
+          peak_regions$end   >= row$BP
+        if (any(in_peak)) next  # suppressed — inside an existing peak
+      }
+
+      # This is the top hit for a new peak; claim a window around it
+      kept[i] <- TRUE
+      peak_regions <- rbind(peak_regions, data.frame(
+        chr   = row$CHR,
+        start = row$BP - peak_window,
+        end   = row$BP + peak_window
+      ))
+    }
+
+    for_tag <- for_tag[kept, , drop = FALSE]
+    if (nrow(for_tag) > 100) {
+      message(paste0("Warning: ", nrow(for_tag), "data points tagged.") )
+    }
+    print(for_tag |> dplyr::select(snp.name))
+    for_tag
+  }
+
 
 #' Generate a Nashville plot
 #'
@@ -361,7 +424,14 @@ find_y_break <- function(log10p_vals,
 #' @param zoom_gene: if `chr` is set this will graph around the gene described by name
 #' @param zoom_left: if `chr` is set this will graph points to the right of this base pair number
 #' @param zoom_right: if `chr` is set this will graph points to the left of this base pair number
-#' @param gene_tag numeric, annotate the SNPs with P-values more extreme than log(gene_tag_p)
+#'   @param tag_genes1 character vector of gene names (or group/tissue names for GWAS SNPs)
+#'     in data1 to label on the plot, regardless of significance
+#'   @param tag_genes2 character vector of gene names (or group/tissue names for GWAS SNPs)
+#'     in data2 to label on the plot, regardless of significance
+#'  @param gene_tag1 numeric, in data1 annotate items with P-values more extreme than gene_tag1
+#'    (default -Inf, i.e. no automatic threshold tagging)
+#'   @param gene_tag2 numeric, in data2 annotate items with P-values more extreme than gene_tag2
+#'     (default -Inf, i.e. no automatic threshold tagging)
 #' @param sig_line1 numeric, draw a horizontal line at -log(sig_line1)
 #' @param sig_line2 numeric, draw a horizontal line at -log(sig_line2)
 #' @param sig_line1_color color for sig_line1
@@ -378,8 +448,13 @@ find_y_break <- function(log10p_vals,
 #' @importFrom ggplot2 ggplot aes theme_bw guides geom_hline guide_legend scale_x_continuous scale_y_continuous scale_colour_manual theme element_text element_line element_blank xlab ylab expand_limits geom_hline geom_point
 #' @importFrom ggrepel geom_label_repel
 #' @export
+
+ #TODO check the gene_tag code make sure it works for each side independantly
 nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=NULL, zoom_gene=NULL,
-                           zoom_left=0, zoom_right=Inf, gene_tag=-Inf, sig_line1=NULL, sig_line2=NULL,
+                           zoom_left=0, zoom_right=Inf,
+                           tag_genes1=NULL, tag_genes2=NULL,
+                           gene_tag1=-Inf, gene_tag2=-Inf,
+                           sig_line1=NULL, sig_line2=NULL,
                            sig_line1_color='black', sig_line2_color='black', draw_genes=FALSE,
                            config=data.frame(V1=NA,V2=NA,V3=NA), y_min=NA, y_max=NA, y_ticks=NA,
                            data1_direction="up", axis_breaks = FALSE, axis_break_scale = 5, ...) {
@@ -472,13 +547,38 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     axis_breaks = NULL
     message('no break')
   }
+  #TODO data1tag data2tag not gene tag (who knows what this gets used for?)
+  #TODO seperate gene_tag from snp_tag
+  #TODO allow labeling my name/rsid
 
-  # gene tag
-  if(is.numeric(gene_tag)) {
-    for_tag <- full.obj[which(full.obj$P < gene_tag & !is.na(full.obj$name)), ]
-    for_tag <- for_tag[order(for_tag$gene.name, -log(for_tag$P, 10), decreasing=TRUE), ]
-    for_tag <- for_tag[!duplicated(for_tag$gene.name),]
-  }
+  # get a list from user
+  #   figure out if any genes in the list
+  #   figure out if any snps in the list
+  #
+  #   data1list, data2list,  <- auto
+  #   data1threshhold, data2threshold, <- -Inf
+  #   sigline1 sigline2 <- 5e-8
+  #   data1 <- up
+  #
+  #   names_for_data1_direction <- c("1:217299497:G_T")
+  #   names_for_data2_direction <- 'auto' go find the snps and tag them
+  #
+  #
+  #
+  # plt <- plt + ggrepel(data = points_to_tag)
+  # try this:
+  # 1) by name -- "rs0001" "BRCA1"
+  #  names_list %in% data$snp.name
+  #  names_list %in% data$gene.name
+  # if names is empty and gene:
+  # 2) if gene,
+  # if names is empty and snp: try:
+  # 3) if snp, by locus "peaks"
+
+  tag1 <- build_tag_subset(full.obj[which(full.obj$datasource == 1), ], tag_genes1, gene_tag1)
+  tag2 <- build_tag_subset(full.obj[which(full.obj$datasource == 2), ], tag_genes2, gene_tag2)
+
+  for_tag <- rbind(tag1, tag2)
 
   # y tick marks
   #if(is.na(y_min) == TRUE) {y_min <- round(min(full.obj$logP, na.rm=TRUE) - 1)}
@@ -514,15 +614,6 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   plt <- ggplot() + theme_bw()
   plt <- plt + xlab(x_axis_name)
   plt <- plt + ylab(expression(log["10"]*italic((p))~"&"~-log["10"]*italic((p))))
-  plt <- plt + ggrepel::geom_text_repel(data = for_tag,
-                                        position = "dodge",
-                                        aes(x = absolute,
-                                            y = logP,
-                                            #TODO: use rsid/name for datatype==gwas if given
-                                            label = ifelse(datatype == "gwas",
-                                                           paste0(CHR, ":", BP),
-                                                           paste0(gene.name, "-", names))))
-
   plt <- plt + theme(axis.text.x=element_text(color='black'),
                      axis.text.y=element_text(color='black'),
                      axis.title.x=element_text(face="bold", color="black"),
@@ -553,10 +644,10 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   #plt <- plt + scale_y_continuous(breaks=seq(y_min, y_max, break_length),
   #                                limits=c(y_min, y_max))
   if (y_log_scale) {
-    plt <- plt + scale_y_continuous(breaks = log_breaks)
+   plt <- plt + scale_y_continuous(breaks = log_breaks)
   } else {
-    plt <- plt + scale_y_continuous(breaks=seq(y_min, y_max, break_length),
-                                    limits=c(y_min, y_max))
+   plt <- plt + scale_y_continuous(breaks=seq(y_min, y_max, break_length),
+                                   limits=c(y_min, y_max))
   }
 
 
@@ -567,7 +658,50 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                        direction = data2_direction,
                        draw_genes=draw_genes)
   plt <- plt + geom_hline(aes(yintercept = 0), linewidth = 1)
+  plt <- plt + ggrepel::geom_label_repel(data = for_tag,
+                                        position = "dodge",
+                                        aes(x = absolute,
+                                            y = logP,
+                                            #TODO: use rsid/name for datatype==gwas if given
+                                            label = ifelse(datatype == "gwas",
+                                                           paste0(CHR, ":", BP*1e6),
+                                                           paste0(gene.name, "-", names))))
 
+#   if (identical(axis_breaks, FALSE) || length(axis_breaks) == 0) {
+#     # no breaks — nothing to do
+# } else if (length(axis_breaks) == 1) {
+#   if (axis_breaks < 0) {
+#     plt <- plt + scale_y_cut(
+#       breaks = axis_breaks,
+#       which  = 1,
+#       scales = axis_break_scale,
+#       expand = FALSE
+#     )
+#   } else {
+#     plt <- plt + scale_y_cut(
+#       breaks = axis_breaks,
+#       which  = 2,
+#       scales = 1 / axis_break_scale,
+#       expand = FALSE
+#     )
+#   }
+# } else if (length(axis_breaks) == 2) {
+#   bottom_break <- min(axis_breaks)
+#   top_break    <- max(axis_breaks)
+#   message(sprintf("bottom break: %g", bottom_break))
+#   message(sprintf("top break:    %g", top_break))
+#   message(sprintf("axis_break_scale: %g", axis_break_scale))
+#   message(sprintf("logP range: [%g, %g]", min(full.obj$logP, na.rm=TRUE), max(full.obj$logP, na.rm=TRUE)))
+#
+#   plt <- plt + scale_y_cut(
+#     breaks = c(bottom_break, top_break),
+#     which  = c(1, 3),
+#     scales = c(axis_break_scale, 1 / axis_break_scale),
+#     expand = FALSE
+#   )
+# } else {
+#   stop("axis_breaks must be FALSE, or a numeric vector of length 1 or 2")
+# }
   #use no break
   # --- axis break handling ---------------------------------------------------
   # axis_breaks: FALSE (no break) | numeric vector of length 1 or 2
@@ -602,14 +736,14 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     message(sprintf("axis_break_scale: %g", axis_break_scale))
     message(sprintf("logP range: [%g, %g]", min(full.obj$logP, na.rm=TRUE), max(full.obj$logP, na.rm=TRUE)))
 
-      plt <- plt + scale_y_break(breaks = c(bottom_break - 0.01, bottom_break),
-                                scales = axis_break_scale,
-                                space = 0.0, symbol = "slash",
-                                expand = c(0,0))
-      plt <- plt + scale_y_break(breaks = c(top_break, top_break + 0.01),
-                                scales = 1/axis_break_scale,
-                                space = 0.0, symbol = "slash",
-                                expand = c(0,0))
+    plt <- plt + scale_y_break(breaks = c(bottom_break - 0.01, bottom_break),
+                              scales = axis_break_scale,
+                              space = 0.0, symbol = "slash",
+                              expand = c(0,0))
+    plt <- plt + scale_y_break(breaks = c(top_break, top_break + 0.01),
+                              scales = 1/axis_break_scale,
+                              space = 0.0, symbol = "slash",
+                              expand = c(0,0))
   } else {
     stop("axis_breaks must be FALSE, or a numeric vector of length 1 or 2")
   }

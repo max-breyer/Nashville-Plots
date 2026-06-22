@@ -3,8 +3,8 @@ Type: Package
 Title: Draw Mirror Plots
 Version: 0.2.0
 Authors@R: 
-    person("Ayush", "Giri", email = "", role = c('aut', 'cre'))
-    person("Max", "Breyer", email = "max.a.breyer@vumc.org", role = c('aut', 'cre'))
+    person("Ayush", "Giri", email = "girilabepidemiology@gmail.com", role = c('aut', 'cre'))
+    person("Max", "Breyer", email = "breyerm@me.com", role = c('aut', 'cre'))
 Maintainer: The package maintainer <yourself@somewhere.net>
 Description: nashvillePlot creates two sided gwas plots.
 License: What license is it under?
