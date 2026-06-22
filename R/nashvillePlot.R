@@ -1,5 +1,4 @@
 suppressPackageStartupMessages(library(ggplot2))
-#suppressPackageStartupMessages(library(data.table))
 
 #' Read config file
 #'
@@ -194,9 +193,6 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
     BP <- (gene.start + gene.end)/2  # TODO this should be delivered from map_df
   }
 
-  #TODO if multiple colors provided for datatype == gwas then
-  # alternate them by chromosome
-  #e.g. c("#E5EC9A" "#F2EC84" "#FFED6F") would do #E5EC9A for colors 1,4,7 etc
   if(!any(is.na(color)) && identical(datatype, "gwas") && length(color) != 1 && length(color) != length(CHR)) {
     group_color <- color
     color <- group_color[(CHR-1) %% length(group_color)+1]
@@ -226,7 +222,6 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
   object[which(is.na(object$names)), "names"] <- object[which(is.na(object$names)), "group"]
   object$V2 <- NULL
   object$V3 <- NULL
-  #object[which(object$P == 0), "P"] <- .Machine$double.xmin
   object[which(object$P != 0), ]
 }
 
@@ -287,11 +282,6 @@ find_y_break <- function(log10p_vals,
                          sig_threshold  = -log10(5e-8),  # ~7.3
                          min_gap        = 1,             # minimum gap size to bother breaking
                          top_quantile   = 0.995) {        # ignore outliers for gap search
-  # ymin < -30 & ymax > 30 then 2 breaks
-  # ymin < -30 & ymax < 30 then 1 break (below)
-  # ymin > -30 & ymax > 30 then 1 break (above)
-  # else no autobreak
-  #FALSE, 'auto'  , c(3, 25) 3,3.01 25, 25.01
 
   sig_vals <- log10p_vals[log10p_vals > sig_threshold]
 
@@ -407,7 +397,6 @@ find_y_break <- function(log10p_vals,
     if (nrow(for_tag) > 100) {
       message(paste0("Warning: ", nrow(for_tag), "data points tagged.") )
     }
-    print(for_tag |> dplyr::select(snp.name))
     for_tag
   }
 
@@ -547,46 +536,12 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     axis_breaks = NULL
     message('no break')
   }
-  #TODO data1tag data2tag not gene tag (who knows what this gets used for?)
-  #TODO seperate gene_tag from snp_tag
-  #TODO allow labeling my name/rsid
-
-  # get a list from user
-  #   figure out if any genes in the list
-  #   figure out if any snps in the list
-  #
-  #   data1list, data2list,  <- auto
-  #   data1threshhold, data2threshold, <- -Inf
-  #   sigline1 sigline2 <- 5e-8
-  #   data1 <- up
-  #
-  #   names_for_data1_direction <- c("1:217299497:G_T")
-  #   names_for_data2_direction <- 'auto' go find the snps and tag them
-  #
-  #
-  #
-  # plt <- plt + ggrepel(data = points_to_tag)
-  # try this:
-  # 1) by name -- "rs0001" "BRCA1"
-  #  names_list %in% data$snp.name
-  #  names_list %in% data$gene.name
-  # if names is empty and gene:
-  # 2) if gene,
-  # if names is empty and snp: try:
-  # 3) if snp, by locus "peaks"
 
   tag1 <- build_tag_subset(full.obj[which(full.obj$datasource == 1), ], tag_names1, tag_threshold1)
   tag2 <- build_tag_subset(full.obj[which(full.obj$datasource == 2), ], tag_names2, tag_threshold2)
 
   for_tag <- rbind(tag1, tag2)
 
-  # y tick marks
-  #if(is.na(y_min) == TRUE) {y_min <- round(min(full.obj$logP, na.rm=TRUE) - 1)}
-  #if(is.na(y_max) == TRUE) {y_max <- round(max(full.obj$logP, na.rm=TRUE) + 1)}
-  #if(is.na(y_ticks) == TRUE) { if((y_max - y_min) > 16) {y_ticks <- 16} else {y_ticks <- round(y_max - y_min)}}
-  #break_length <- round(round(y_max - y_min)/y_ticks)
-
-  #TODO if y max > 30  & handle ticks
   # y tick marks
   if(is.na(y_min) == TRUE) {y_min <- round(min(full.obj$logP, na.rm=TRUE) - 1)}
   if(is.na(y_max) == TRUE) {y_max <- round(max(full.obj$logP, na.rm=TRUE) + 1)}
@@ -640,9 +595,6 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     plt <- plt + scale_x_continuous(label = waiver(), breaks = waiver())
   }
 
-  ###############################################################################################################
-  #plt <- plt + scale_y_continuous(breaks=seq(y_min, y_max, break_length),
-  #                                limits=c(y_min, y_max))
   if (y_log_scale) {
    plt <- plt + scale_y_continuous(breaks = log_breaks)
   } else {
@@ -659,49 +611,13 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                        draw_genes=draw_genes)
   plt <- plt + geom_hline(aes(yintercept = 0), linewidth = 1)
   plt <- plt + ggrepel::geom_label_repel(data = for_tag,
-                                        position = "dodge",
+                                        position = position_dodge(width = NULL),
                                         aes(x = absolute,
                                             y = logP,
                                             #TODO: use rsid/name for datatype==gwas if given
                                             label = ifelse(datatype == "gwas",
                                                            paste0(CHR, ":", BP*1e6),
                                                            paste0(gene.name, "-", names))))
-
-#   if (identical(axis_breaks, FALSE) || length(axis_breaks) == 0) {
-#     # no breaks — nothing to do
-# } else if (length(axis_breaks) == 1) {
-#   if (axis_breaks < 0) {
-#     plt <- plt + scale_y_cut(
-#       breaks = axis_breaks,
-#       which  = 1,
-#       scales = axis_break_scale,
-#       expand = FALSE
-#     )
-#   } else {
-#     plt <- plt + scale_y_cut(
-#       breaks = axis_breaks,
-#       which  = 2,
-#       scales = 1 / axis_break_scale,
-#       expand = FALSE
-#     )
-#   }
-# } else if (length(axis_breaks) == 2) {
-#   bottom_break <- min(axis_breaks)
-#   top_break    <- max(axis_breaks)
-#   message(sprintf("bottom break: %g", bottom_break))
-#   message(sprintf("top break:    %g", top_break))
-#   message(sprintf("axis_break_scale: %g", axis_break_scale))
-#   message(sprintf("logP range: [%g, %g]", min(full.obj$logP, na.rm=TRUE), max(full.obj$logP, na.rm=TRUE)))
-#
-#   plt <- plt + scale_y_cut(
-#     breaks = c(bottom_break, top_break),
-#     which  = c(1, 3),
-#     scales = c(axis_break_scale, 1 / axis_break_scale),
-#     expand = FALSE
-#   )
-# } else {
-#   stop("axis_breaks must be FALSE, or a numeric vector of length 1 or 2")
-# }
   #use no break
   # --- axis break handling ---------------------------------------------------
   # axis_breaks: FALSE (no break) | numeric vector of length 1 or 2
