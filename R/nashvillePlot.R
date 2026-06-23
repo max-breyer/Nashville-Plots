@@ -279,7 +279,14 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
     group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Paired"))(length(unique(CHR)))
     color <- group_color[as.numeric(as.factor(CHR %% 2))]
   } else if (identical(datatype, "meta")) {
-    group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Set3"))(length(unique(group)))
+    #group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Set3"))(length(unique(group)))
+    # meta palette is paletteer_dynamic("cartography::multi.pal", 20)
+    meta_palette <- c("#CB7C77FF", "#68D359FF", "#6B42C8FF", "#C9D73DFF",
+                      "#C555CBFF", "#AED688FF", "#502E71FF", "#C49A3FFF",
+                      "#6A7DC9FF", "#D7652DFF", "#7CD5C8FF", "#C5383CFF",
+                      "#507D41FF", "#CF4C8BFF", "#5D8D9CFF", "#722E41FF",
+                      "#C8B693FF", "#33333CFF", "#C6A5CCFF", "#674C2AFF")
+    group_color <- colorRampPalette(meta_palette)(length(unique(group)))
     color <- group_color[as.numeric(as.factor(group))]
   }
   # Step 2: override with user-supplied colors from config where V3 is non-NA/non-empty.
