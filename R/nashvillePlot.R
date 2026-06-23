@@ -445,12 +445,16 @@ build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
       list_hit <- (has_gene & obj$gene.name %in% tag_genes) |
         (has_name & obj$names %in% tag_genes)
     }
+    print('list')
+    print(list_hit)
 
     # rows exceeding the significance threshold
     thresh_hit <- rep(FALSE, nrow(obj))
     if (is.numeric(gene_tag) && length(gene_tag) == 1 && !is.na(gene_tag)) {
       thresh_hit <- !is.na(obj$P) & obj$P < gene_tag & (has_gene | has_name)
     }
+    print('thresh')
+    print(thresh_hit)
 
     keep <- list_hit | thresh_hit
     for_tag <- obj[keep, , drop = FALSE]
