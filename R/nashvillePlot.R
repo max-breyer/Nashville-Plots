@@ -1,4 +1,5 @@
 suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggbreak))
 
 #' Read config file
 #'
