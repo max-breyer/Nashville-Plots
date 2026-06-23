@@ -445,16 +445,12 @@ build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
       list_hit <- (has_gene & obj$gene.name %in% tag_genes) |
         (has_name & obj$names %in% tag_genes)
     }
-    print('list')
-    print(list_hit)
 
     # rows exceeding the significance threshold
     thresh_hit <- rep(FALSE, nrow(obj))
     if (is.numeric(gene_tag) && length(gene_tag) == 1 && !is.na(gene_tag)) {
       thresh_hit <- !is.na(obj$P) & obj$P < gene_tag & (has_gene | has_name)
     }
-    print('thresh')
-    print(thresh_hit)
 
     keep <- list_hit | thresh_hit
     for_tag <- obj[keep, , drop = FALSE]
@@ -641,7 +637,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                             find_y_break(full.obj[which(full.obj$datasource == 2), "logP"])))
   } else {
     axis_breaks = NULL
-    message('no break')
+      message('no break')
   }
 
   tag1 <- build_tag_subset(full.obj[which(full.obj$datasource == 1), ], tag_names1, tag_threshold1)
@@ -723,7 +719,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                                             y = logP,
                                             #TODO: use rsid/name for datatype==gwas if given
                                             label = ifelse(datatype == "gwas",
-                                                           paste0(CHR, ":", BP*1e6),
+                                                           snp.name,
                                                            paste0(gene.name, "-", names))))
   plt <- plt + theme(
     panel.border = element_blank(),
