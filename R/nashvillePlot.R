@@ -767,14 +767,14 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   # }
   } else if (length(axis_breaks) == 1) {
     if (axis_breaks < 0) {
-      plt <- plt + scale_y_cut(
+      plt <- plt + ggbreak::scale_y_cut(
         breaks = axis_breaks,
         which  = 1,
         scales = axis_break_scale,
         expand = FALSE
       )
     } else {
-      plt <- plt + scale_y_cut(
+      plt <- plt + ggbreak::scale_y_cut(
         breaks = axis_breaks,
         which  = 2,
         scales = 1 / axis_break_scale,
@@ -789,7 +789,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     message(sprintf("axis_break_scale: %g", axis_break_scale))
     message(sprintf("logP range: [%g, %g]", min(full.obj$logP, na.rm=TRUE), max(full.obj$logP, na.rm=TRUE)))
 
-    plt <- plt + scale_y_cut(
+    plt <- plt + ggbreak::scale_y_cut(
       breaks = c(bottom_break, top_break),
       which  = c(1, 3),
       scales = c(axis_break_scale, 1 / axis_break_scale),
