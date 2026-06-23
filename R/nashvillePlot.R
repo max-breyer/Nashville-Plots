@@ -721,6 +721,12 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                                             label = ifelse(datatype == "gwas",
                                                            paste0(CHR, ":", BP*1e6),
                                                            paste0(gene.name, "-", names))))
+  plt <- plt + theme(
+    panel.border = element_blank(),
+    axis.line = element_line(color = "black"),
+    panel.spacing = ggplot2::unit(0, "pt")
+  )
+
   #use no break
   # --- axis break handling ---------------------------------------------------
   # axis_breaks: FALSE (no break) | numeric vector of length 1 or 2
@@ -801,10 +807,5 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   # }
 
 
-  plt <- plt + theme(
-    panel.border = element_blank(),
-    axis.line = element_line(color = "black"),
-    panel.spacing = ggplot2::unit(0, "pt")
-  )
   plt
 }
