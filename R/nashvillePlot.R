@@ -727,44 +727,79 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   if (identical(axis_breaks, FALSE) || length(axis_breaks) == 0) {
     # no breaks — nothing to do
 
+  # } else if (length(axis_breaks) == 1) {
+  #   # single break
+  #   # below 0 → bottom segment compressed, use scale as-is
+  #   # above 0 → top segment compressed, invert the scale
+  #   if (axis_breaks < 0) {
+  #     plt <- plt + ggbreak::scale_y_break(
+  #       breaks = c(axis_breaks, axis_breaks + 0.01),
+  #       scales = axis_break_scale,
+  #       space  = 0.0, symbol = "slash", expand = c(0,0)
+  #     )
+  #   } else {
+  #     plt <- plt + ggbreak::scale_y_break(
+  #       breaks = c(axis_breaks, axis_breaks + 0.01),
+  #       scales = 1 / axis_break_scale,
+  #       space  = 0.0, symbol = "slash", expand = c(0,0)
+  #     )
+  #   }
+  #
+  # } else if (length(axis_breaks) == 2) {
+  #   bottom_break <- min(axis_breaks)
+  #   top_break    <- max(axis_breaks)
+  #
+  #   message(sprintf("bottom break interval: c(%g, %g)", bottom_break - 0.01, bottom_break))
+  #   message(sprintf("top break interval:    c(%g, %g)", top_break, top_break + 0.01))
+  #   message(sprintf("axis_break_scale: %g", axis_break_scale))
+  #   message(sprintf("logP range: [%g, %g]", min(full.obj$logP, na.rm=TRUE), max(full.obj$logP, na.rm=TRUE)))
+  #
+  #   plt <- plt + ggbreak::scale_y_break(breaks = c(bottom_break - 0.01, bottom_break),
+  #                             scales = axis_break_scale,
+  #                             space = 0.0, symbol = "slash",
+  #                             expand = c(0,0))
+  #   plt <- plt + ggbreak::scale_y_break(breaks = c(top_break, top_break + 0.01),
+  #                             scales = 1/axis_break_scale,
+  #                             space = 0.0, symbol = "slash",
+  #                             expand = c(0,0))
+  # } else {
+  #   stop("axis_breaks must be FALSE, or a numeric vector of length 1 or 2")
+  # }
   } else if (length(axis_breaks) == 1) {
-    # single break
-    # below 0 → bottom segment compressed, use scale as-is
-    # above 0 → top segment compressed, invert the scale
     if (axis_breaks < 0) {
-      plt <- plt + scale_y_break(
-        breaks = c(axis_breaks, axis_breaks + 0.01),
+      plt <- plt + scale_y_cut(
+        breaks = axis_breaks,
+        which  = 1,
         scales = axis_break_scale,
-        space  = 0.0, symbol = "slash", expand = c(0,0)
+        expand = FALSE
       )
     } else {
-      plt <- plt + scale_y_break(
-        breaks = c(axis_breaks, axis_breaks + 0.01),
+      plt <- plt + scale_y_cut(
+        breaks = axis_breaks,
+        which  = 2,
         scales = 1 / axis_break_scale,
-        space  = 0.0, symbol = "slash", expand = c(0,0)
+        expand = FALSE
       )
     }
-
   } else if (length(axis_breaks) == 2) {
     bottom_break <- min(axis_breaks)
     top_break    <- max(axis_breaks)
-
-    message(sprintf("bottom break interval: c(%g, %g)", bottom_break - 0.01, bottom_break))
-    message(sprintf("top break interval:    c(%g, %g)", top_break, top_break + 0.01))
+    message(sprintf("bottom break: %g", bottom_break))
+    message(sprintf("top break:    %g", top_break))
     message(sprintf("axis_break_scale: %g", axis_break_scale))
     message(sprintf("logP range: [%g, %g]", min(full.obj$logP, na.rm=TRUE), max(full.obj$logP, na.rm=TRUE)))
 
-    plt <- plt + ggbreak::scale_y_break(breaks = c(bottom_break - 0.01, bottom_break),
-                              scales = axis_break_scale,
-                              space = 0.0, symbol = "slash",
-                              expand = c(0,0))
-    plt <- plt + ggbreak::scale_y_break(breaks = c(top_break, top_break + 0.01),
-                              scales = 1/axis_break_scale,
-                              space = 0.0, symbol = "slash",
-                              expand = c(0,0))
+    plt <- plt + scale_y_cut(
+      breaks = c(bottom_break, top_break),
+      which  = c(1, 3),
+      scales = c(axis_break_scale, 1 / axis_break_scale),
+      expand = FALSE
+    )
   } else {
     stop("axis_breaks must be FALSE, or a numeric vector of length 1 or 2")
   }
+
+
   plt <- plt + theme(
     panel.border = element_blank(),
     axis.line = element_line(color = "black"),
