@@ -302,8 +302,8 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
   if(any(is.na(shape))) {
     shape <- as.factor(CHR %% 2)
   }
-
-  temp <- data.frame(as.character(gene.name), group, CHR, BP, P, gene.start, gene.end, color, shape, datatype, snp.name)
+  gene.name <- ifelse(is.na(gene.name), gene.name, as.character(gene.name))
+  temp <- data.frame(gene.name, group, CHR, BP, P, gene.start, gene.end, color, shape, datatype, snp.name)
   object <- merge(temp, config, by.x='group', by.y = 'V1', all.x=T)
   object$names <- object$V2
   object[which(is.na(object$names)), "names"] <- object[which(is.na(object$names)), "group"]
