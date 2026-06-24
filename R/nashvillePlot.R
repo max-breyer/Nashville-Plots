@@ -280,6 +280,12 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
     color <- group_color[as.numeric(as.factor(CHR %% 2))]
   } else if (identical(datatype, "meta")) {
     #group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Set3"))(length(unique(group)))
+    # unused for now
+    other_palette <- c('#e6194B', '#3cb44b', '#ffe119', '#4363d8',
+                       '#f58231', '#911eb4', '#42d4f4', '#f032e6',
+                       '#bfef45', '#fabed4', '#469990', '#dcbeff',
+                       '#9A6324', '#fffac8', '#800000', '#aaffc3',
+                       '#808000', '#ffd8b1', '#000075', '#a9a9a9')
     # meta palette is paletteer_dynamic("cartography::multi.pal", 20)
     meta_palette <- c("#CB7C77FF", "#68D359FF", "#6B42C8FF", "#C9D73DFF",
                       "#C555CBFF", "#AED688FF", "#502E71FF", "#C49A3FFF",
@@ -297,7 +303,7 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
     shape <- as.factor(CHR %% 2)
   }
 
-  temp <- data.frame(gene.name, group, CHR, BP, P, gene.start, gene.end, color, shape, datatype, snp.name)
+  temp <- data.frame(as.character(gene.name), group, CHR, BP, P, gene.start, gene.end, color, shape, datatype, snp.name)
   object <- merge(temp, config, by.x='group', by.y = 'V1', all.x=T)
   object$names <- object$V2
   object[which(is.na(object$names)), "names"] <- object[which(is.na(object$names)), "group"]
