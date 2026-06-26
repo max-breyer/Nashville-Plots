@@ -150,7 +150,6 @@ read_metaXcan_folder <-  function(directory, config=data.frame(V1=NA,V2=NA,V3=NA
     tissue_file <- read.csv(file=file.path(directory, files[i]), header = TRUE)
     tissue_file$dtype <- files[i]
     tissues <- rbind(tissues, tissue_file)
-    message(sum(is.na(tissues$Gene)))
   }
   tissues$ENSG <- sub("\\..*", "", tissues[["gene"]])
   appended_gene_d <- merge(tissues, appended_gene_d, by.x = "ENSG", by.y = "ENSG")
@@ -167,7 +166,7 @@ read_metaXcan_folder <-  function(directory, config=data.frame(V1=NA,V2=NA,V3=NA
                                 gene.start = appended_gene_d[["START_POS"]],
                                 gene.end = appended_gene_d[["END_POS"]],
                                 group = appended_gene_d[["dtype"]],
-                                gene.name = appended_gene_d[["Gene"]],
+                                gene.name = appended_gene_d[["gene_name"]],
                                 color=color,
                                 shape=shape,
                                 datatype="meta",
