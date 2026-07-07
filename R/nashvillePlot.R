@@ -174,76 +174,6 @@ read_metaXcan_folder <-  function(directory, config=data.frame(V1=NA,V2=NA,V3=NA
   meta.obj
 }
 
-#' Builds an object ready to plot
-#'
-#' This function take data.frame columns and returns an object ready to plot with nashville.plot()
-#' @param CHR numeric column of chromosome numbers
-#' @param P numeric column of P values to be plotted
-#' @param BP numeric column of base pair locations within a chromosome, either this or gene.start and gene.end are required
-#' @param gene.start numeric column of base pair locations for the start of a gene
-#' @param gene.end numeric column of base pair locations for the end of a gene
-#' @param group label for plotting, often this will be a tissue name
-#' @param gene.name name of each gene, this will be shown for P values greater than the tag threshold
-# make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.end=NA, gene.name=NA, color=NA, shape=NA, snp.name = NA, datatype=NA) {
-#   ifelse(all(is.numeric(CHR)), NA, stop("CHR must be numeric"))
-#   ifelse(all(is.numeric(P)), NA, stop("P must be numeric"))
-#   ifelse(all(is.numeric(BP)) | all(is.na(BP)), NA, stop("BP must be numeric"))
-#   ifelse(all(is.numeric(gene.start)) | all(is.na(gene.start)), NA, stop("gene.start must be numeric"))
-#   ifelse(all(is.numeric(gene.end)) | all(is.na(gene.end)), NA, stop("gene.end must be numeric"))
-#   #if (length(color) != 1 && length(color) != length(P)) {
-#   #  stop("color must be the same length as P or a single value")
-#   #}
-#   if (length(shape) != 1 && length(shape) != length(P)) {
-#     stop("shape must be the same length as P or a single value")
-#   }
-#
-#   #make sure that either BP or gene.start+gene.end exists
-#   if(all(is.na(gene.start)) && all(is.na(gene.end))) {
-#     stopifnot(is.numeric(BP))
-#   }
-#   if(all(is.na(BP))) {
-#     stopifnot(is.numeric(gene.start) && is.numeric(gene.end))
-#     BP <- (gene.start + gene.end)/2  # TODO this should be delivered from map_df
-#   }
-#
-#
-#   if(!any(is.na(color)) && identical(datatype, "gwas") && length(color) != 1 && length(color) != length(CHR)) {
-#     group_color <- color
-#     color <- group_color[(CHR-1) %% length(group_color)+1]
-#   }
-#
-#   #set color if not provided
-#   if(any(is.na(color)) && identical(datatype, "gwas")) {
-#     #group_color <- unname(Polychrome::createPalette(length(unique(CHR)),  c('#000000', '#aaaaaa', "#ff0000", "#00ff00", "#0000ff")))
-#     group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Paired"))(length(unique(CHR)))
-#     color <- as.factor((CHR %% 2))
-#     color <- group_color[as.numeric(color)]
-#   } else
-#     if(any(is.na(color)) && identical(datatype, "meta")) {
-#       group_color <- colorRampPalette(RColorBrewer::brewer.pal(12, "Set3"))(length(unique(group)))
-#       color <- as.factor(group)
-#       color <- group_color[as.numeric(color)]
-#     }
-#
-#   #set shape if not provided
-#   if(any(is.na(shape))) {
-#     shape <- as.factor(CHR %% 2)
-#   }
-#
-#   temp <- data.frame(gene.name, group, CHR, BP, P, gene.start, gene.end, color, shape, datatype, snp.name)
-#   object <- merge(temp, config, by.x='group', by.y = 'V1', all.x=T)
-#   object$names <- object$V2
-#   object[which(is.na(object$names)), "names"] <- object[which(is.na(object$names)), "group"]
-#   object$V2 <- NULL
-#   object$V3 <- NULL
-#   object[which(object$P != 0), ]
-# }
-
-
-
-
-
-
 #############
 #############
 #' Builds an object ready to plot
@@ -320,26 +250,10 @@ make.valid.object <- function(CHR, P, group, config, BP=NA, gene.start=NA, gene.
       object$color[grp_rows] <- palette[(chr_vals - 1) %% length(palette) + 1]
     }
   }
-
-
   object$V2 <- NULL
   object$V3 <- NULL
   object[which(object$P != 0), ]
 }
-
-
-#############
-#############
-
-
-
-
-
-
-
-
-
-
 
 #' plot manhattan
 #'
@@ -517,7 +431,6 @@ build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
     for_tag
   }
 
-
 #' Generate a Nashville plot
 #'
 #' This function returns a ggplot2 graph object of the Nashville plot
@@ -661,7 +574,6 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   # y tick marks
   if(is.na(y_min) == TRUE) {y_min <- round(min(full.obj$logP, na.rm=TRUE) - 1)}
   if(is.na(y_max) == TRUE) {y_max <- round(max(full.obj$logP, na.rm=TRUE) + 1)}
-
   y_range <- y_max - y_min
 
   signed_log <- function(x) sign(x) * log1p(abs(x))
@@ -683,6 +595,15 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   }
   # plotting
   plt <- ggplot() + theme_bw()
+  plt <- plt + plot.mh(data = full.obj[which(full.obj$datasource == 1), ],
+                       direction = data1_direction,
+                       draw_genes=draw_genes)
+  plt <- plt + plot.mh(data = full.obj[which(full.obj$datasource == 2), ],
+                       direction = data2_direction,
+                       draw_genes=draw_genes)
+  plt <- plt + scale_color_identity("Tissue", guide = "legend",
+                                    labels = full.obj$name,
+                                    breaks = full.obj$color)
   plt <- plt + xlab(x_axis_name)
   plt <- plt + ylab(expression(log["10"]*italic((p))~"&"~-log["10"]*italic((p))))
   plt <- plt + theme(axis.text.x=element_text(color='black'),
@@ -690,12 +611,8 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                      axis.title.x=element_text(face="bold", color="black"),
                      axis.title.y=element_text(face="bold", color="black"),
                      axis.ticks.x=element_line())
-
   plt <- plt + theme(panel.grid.major=element_blank(),
                      panel.grid.minor=element_blank())
-  plt <- plt + scale_color_identity("Tissue", guide = "legend",
-                                    labels = full.obj$name,
-                                    breaks = full.obj$color)
   plt <- plt + ggplot2::guides(shape = "none",
                       size = "none",
                       colour = guide_legend(override.aes = list(size=6)))
@@ -705,33 +622,22 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   if(!is.null(sig_line2)) {
     plt <- plt + geom_hline(aes(yintercept = data2_direction * -log10(sig_line2)), color = sig_line2_color, linetype='dashed')
   }
+  plt <- plt + geom_hline(aes(yintercept = 0), linewidth = 1)
   if(is.null(chr)) {
     plt <- plt + scale_x_continuous(label = axis_set$CHR, breaks = axis_set$center)
   } else {
     plt <- plt + scale_x_continuous(label = waiver(), breaks = waiver())
   }
-
   if (y_log_scale) {
    plt <- plt + scale_y_continuous(breaks = log_breaks)
   } else {
    plt <- plt + scale_y_continuous(breaks=seq(y_min, y_max, break_length),
                                    limits=c(y_min, y_max))
   }
-
-
-  plt <- plt + plot.mh(data = full.obj[which(full.obj$datasource == 1), ],
-                       direction = data1_direction,
-                       draw_genes=draw_genes)
-  plt <- plt + plot.mh(data = full.obj[which(full.obj$datasource == 2), ],
-                       direction = data2_direction,
-                       draw_genes=draw_genes)
-  plt <- plt + geom_hline(aes(yintercept = 0), linewidth = 1)
-  plt <- plt + ggrepel::geom_label_repel(data = for_tag,
-                                        position = position_dodge(width = NULL),
-                                        aes(x = absolute,
-                                            y = logP,
-                                            #TODO: use rsid/name for datatype==gwas if given
-                                            label = ifelse(datatype == "gwas",
+  plt2 <- plt + ggrepel::geom_label_repel(data = for_tag,
+                                         aes(x = absolute,
+                                             y = logP,
+                                             label = ifelse(datatype == "gwas",
                                                            snp.name,
                                                            paste0(gene.name, "-", names))))
   plt <- plt + theme(
@@ -779,7 +685,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                               space = 0.0, symbol = "slash",
                               expand = c(0,0))
     plt <- plt + ggbreak::scale_y_break(breaks = c(top_break, top_break + 0.01),
-                              scales = 1/axis_break_scale,
+                              scales = 1/axis_break_scale,  # should be 1?
                               space = 0.0, symbol = "slash",
                               expand = c(0,0))
   } else {
@@ -818,7 +724,6 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   # } else {
   #   stop("axis_breaks must be FALSE, or a numeric vector of length 1 or 2")
   # }
-
-
   plt
 }
+
