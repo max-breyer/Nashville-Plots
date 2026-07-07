@@ -634,7 +634,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
    plt <- plt + scale_y_continuous(breaks=seq(y_min, y_max, break_length),
                                    limits=c(y_min, y_max))
   }
-  plt2 <- plt + ggrepel::geom_label_repel(data = for_tag,
+  plt <- plt + ggrepel::geom_label_repel(data = for_tag,
                                          aes(x = absolute,
                                              y = logP,
                                              label = ifelse(datatype == "gwas",
