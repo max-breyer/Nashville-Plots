@@ -586,8 +586,22 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   if(is.numeric(axis_breaks)) {
     message("using manual breaks")
   } else if(identical(axis_breaks, 'auto')) {
-    axis_breaks <- unlist(c(find_y_break(full.obj[which(full.obj$datasource == 1), "logP"], direction = data1_direction),
-                            find_y_break(full.obj[which(full.obj$datasource == 2), "logP"], direction = data2_direction)))
+    #axis_breaks <- unlist(c(find_y_break(full.obj[which(full.obj$datasource == 1), "logP"], direction = data1_direction),
+    #                        find_y_break(full.obj[which(full.obj$datasource == 2), "logP"], direction = data2_direction)))
+    b1 <- find_y_break(full.obj[which(full.obj$datasource == 1), "logP"])
+    b2 <- if (!is.null(data2)) find_y_break(full.obj[which(full.obj$datasource == 2), "logP"]) else NULL
+    all_breaks <- unlist(c(b1, b2))
+
+    if (is.null(all_breaks) || length(all_breaks) == 0) {
+      axis_breaks <- FALSE
+      message('no break')
+    } else if (length(all_breaks) <= 2) {
+      axis_breaks <- all_breaks
+    } else {
+      # more than one candidate pair found (e.g. both datasets had gaps) —
+      # collapse to a single bottom/top break spanning all of them
+      axis_breaks <- c(min(all_breaks), max(all_breaks))
+    }
   } else {
     axis_breaks = NULL
     message('no break')
