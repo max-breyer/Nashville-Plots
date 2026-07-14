@@ -310,45 +310,57 @@ to_megabase <- function(df) {
 }
 
 find_y_break <- function(log10p_vals,
-                         sig_threshold  = -log10(5e-8),  # ~7.3
-                         min_gap        = 1,             # minimum gap size to bother breaking
-                         top_quantile   = 0.995) {        # ignore outliers for gap search
+                         direction        = 1,            # 1 for "up" data, -1 for "down" data
+                         sig_threshold    = -log10(5e-8),  # ~7.3
+                         min_gap          = 1,             # minimum gap size to bother breaking
+                         max_outlier_frac = 0.10) {         # never isolate more than this fraction of hits
 
-  sig_vals <- log10p_vals[log10p_vals > sig_threshold]
+  # logP for a "down" dataset is uniformly negative, so comparing directly
+  # against a positive sig_threshold would find zero hits. Flip into
+  # "positive-going magnitude" space using the dataset's own direction so the
+  # same logic works for both up- and down-plotted data.
+  vals <- direction * log10p_vals
+  sig_vals <- sort(vals[vals > sig_threshold])
+  n <- length(sig_vals)
 
-  if (length(sig_vals) < 2) {
+  if (n < 2) {
     message("Too few significant hits to determine a break.")
     return(NULL)
   }
 
-  sorted <- sort(sig_vals)
+  # Search for the largest gap, but only within the extreme tail: a break
+  # should shrink a handful of far-outlying points, not slice through the
+  # bulk of the significant hits. Capping outliers out of consideration
+  # entirely (as opposed to just restricting where we search) would prevent
+  # ever detecting the gap that isolates them, so we restrict the search
+  # window instead of discarding data.
+  gaps <- diff(sig_vals)
+  max_outliers  <- max(1, floor(n * max_outlier_frac))
+  candidate_idx <- seq(from = max(1, n - max_outliers), to = n - 1)
 
-  # Cap extreme outliers so they don't swamp the gap detection
-  cap     <- quantile(sorted, top_quantile)
-  trimmed <- sorted[sorted <= cap]
+  local_gaps <- gaps[candidate_idx]
+  best       <- which.max(local_gaps)
+  gap_idx    <- candidate_idx[best]
+  max_gap    <- gaps[gap_idx]
 
-  if (length(trimmed) < 2) return(NULL)
-
-  # Find the largest consecutive gap
-  gaps      <- diff(trimmed)
-  max_gap   <- max(gaps)
-  gap_idx   <- which.max(gaps)
-  break_lo  <- trimmed[gap_idx]        # bottom of the break
-  break_hi  <- trimmed[gap_idx + 1]    # top of the break
+  break_lo <- sig_vals[gap_idx]        # bottom of the break, in magnitude space
+  break_hi <- sig_vals[gap_idx + 1]    # top of the break, in magnitude space
 
   if (max_gap < min_gap) {
     message(sprintf(
-      "Largest gap is %.1f (below min_gap = %g); no break applied.",
+      "Largest gap near the tail is %.1f (below min_gap = %g); no break applied.",
       max_gap, min_gap
     ))
     return(NULL)
   }
   message(sprintf(
-    "Break placed between %.1f and %.1f (gap = %.1f -log10 units)",
-    break_lo, break_hi, max_gap
+    "Break placed between %.1f and %.1f (gap = %.1f -log10 units), isolating %d/%d hits",
+    break_lo, break_hi, max_gap, n - gap_idx, n
   ))
 
-  list(break_lo, break_hi)
+  # Convert back out of magnitude space and re-sort, since flipping the sign
+  # for "down" data reverses the numeric order of break_lo/break_hi.
+  as.list(sort(direction * c(break_lo, break_hi)))
 }
 
 #' Build a tag subset for one data source
@@ -574,8 +586,8 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   if(is.numeric(axis_breaks)) {
     message("using manual breaks")
   } else if(identical(axis_breaks, 'auto')) {
-    axis_breaks <- unlist(c(find_y_break(full.obj[which(full.obj$datasource == 1), "logP"]),
-                            find_y_break(full.obj[which(full.obj$datasource == 2), "logP"])))
+    axis_breaks <- unlist(c(find_y_break(full.obj[which(full.obj$datasource == 1), "logP"], direction = data1_direction),
+                            find_y_break(full.obj[which(full.obj$datasource == 2), "logP"], direction = data2_direction)))
   } else {
     axis_breaks = NULL
     message('no break')
@@ -706,38 +718,5 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   } else {
     stop("axis_breaks must be FALSE, or a numeric vector of length 1 or 2")
   }
-  # } else if (length(axis_breaks) == 1) {
-  #   if (axis_breaks < 0) {
-  #     plt <- plt + ggbreak::scale_y_cut(
-  #       breaks = axis_breaks,
-  #       which  = 1,
-  #       scales = axis_break_scale,
-  #       expand = FALSE
-  #     )
-  #   } else {
-  #     plt <- plt + ggbreak::scale_y_cut(
-  #       breaks = axis_breaks,
-  #       which  = 2,
-  #       scales = 1 / axis_break_scale,
-  #       expand = FALSE
-  #     )
-  #   }
-  # } else if (length(axis_breaks) == 2) {
-  #   bottom_break <- min(axis_breaks)
-  #   top_break    <- max(axis_breaks)
-  #   message(sprintf("bottom break: %g", bottom_break))
-  #   message(sprintf("top break:    %g", top_break))
-  #   message(sprintf("axis_break_scale: %g", axis_break_scale))
-  #   message(sprintf("logP range: [%g, %g]", min(full.obj$logP, na.rm=TRUE), max(full.obj$logP, na.rm=TRUE)))
-  #
-  #   plt <- plt + ggbreak::scale_y_cut(
-  #     breaks = c(bottom_break, top_break),
-  #     which  = c(1, 3),
-  #     scales = c(axis_break_scale, 1 / axis_break_scale),
-  #     expand = FALSE
-  #   )
-  # } else {
-  #   stop("axis_breaks must be FALSE, or a numeric vector of length 1 or 2")
-  # }
   plt
 }
