@@ -361,75 +361,75 @@ find_y_break <- function(log10p_vals,
 #'  crossing the threshold in each peak window.
 build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
 
-    if (nrow(obj) == 0) return(obj[0, , drop = FALSE])
+  if (nrow(obj) == 0) return(obj[0, , drop = FALSE])
 
-    has_gene <- !is.na(obj$gene.name)
-    has_name <- !is.na(obj$names)
+  has_gene <- !is.na(obj$gene.name)
+  has_name <- !is.na(obj$names)
 
-    # rows matching user-supplied list of items to tag
-    list_hit <- rep(FALSE, nrow(obj))
-    if (!is.null(tag_genes) && length(tag_genes) > 0) {
-      list_hit <- (has_gene & obj$gene.name %in% tag_genes) |
-        (has_name & obj$names %in% tag_genes)
-    }
-
-    # rows exceeding the significance threshold
-    thresh_hit <- rep(FALSE, nrow(obj))
-    if (is.numeric(gene_tag) && length(gene_tag) == 1 && !is.na(gene_tag)) {
-      thresh_hit <- !is.na(obj$P) & obj$P < gene_tag & (has_gene | has_name)
-    }
-
-    keep <- list_hit | thresh_hit
-    for_tag <- obj[keep, , drop = FALSE]
-
-    if (nrow(for_tag) == 0) return(for_tag)
-
-    # order so the most significant hit per gene is kept first, then dedupe
-    for_tag <- for_tag[order(for_tag$gene.name, -log(for_tag$P, 10), decreasing = TRUE), ]
-    for_tag <- for_tag[!duplicated(for_tag[, c("gene.name", "snp.name")]), ]
-
-    # Sort by significance so the top hit per region comes first
-    for_tag <- for_tag[order(for_tag$P), ]
-
-    kept <- rep(FALSE, nrow(for_tag))
-    peak_regions <- data.frame(chr = character(), start = numeric(), end = numeric())
-
-    for (i in seq_len(nrow(for_tag))) {
-      row <- for_tag[i, ]
-
-      # Named hits are always kept regardless of proximity to a peak
-      is_named <- !is.null(tag_genes) && length(tag_genes) > 0 &&
-        ((!is.na(row$gene.name) && row$gene.name %in% tag_genes) |
-           (!is.na(row$names)     && row$names     %in% tag_genes))
-
-      if (is_named) {
-        kept[i] <- TRUE
-        next
-      }
-
-      # Check if this variant falls within an already-claimed peak window
-      if (nrow(peak_regions) > 0) {
-        in_peak <- peak_regions$chr == row$CHR &
-          peak_regions$start <= row$BP &
-          peak_regions$end   >= row$BP
-        if (any(in_peak)) next  # suppressed — inside an existing peak
-      }
-
-      # This is the top hit for a new peak; claim a window around it
-      kept[i] <- TRUE
-      peak_regions <- rbind(peak_regions, data.frame(
-        chr   = row$CHR,
-        start = row$BP - peak_window,
-        end   = row$BP + peak_window
-      ))
-    }
-
-    for_tag <- for_tag[kept, , drop = FALSE]
-    if (nrow(for_tag) > 100) {
-      message(paste0("Warning: ", nrow(for_tag), "data points tagged.") )
-    }
-    for_tag
+  # rows matching user-supplied list of items to tag
+  list_hit <- rep(FALSE, nrow(obj))
+  if (!is.null(tag_genes) && length(tag_genes) > 0) {
+    list_hit <- (has_gene & obj$gene.name %in% tag_genes) |
+      (has_name & obj$names %in% tag_genes)
   }
+
+  # rows exceeding the significance threshold
+  thresh_hit <- rep(FALSE, nrow(obj))
+  if (is.numeric(gene_tag) && length(gene_tag) == 1 && !is.na(gene_tag)) {
+    thresh_hit <- !is.na(obj$P) & obj$P < gene_tag & (has_gene | has_name)
+  }
+
+  keep <- list_hit | thresh_hit
+  for_tag <- obj[keep, , drop = FALSE]
+
+  if (nrow(for_tag) == 0) return(for_tag)
+
+  # order so the most significant hit per gene is kept first, then dedupe
+  for_tag <- for_tag[order(for_tag$gene.name, -log(for_tag$P, 10), decreasing = TRUE), ]
+  for_tag <- for_tag[!duplicated(for_tag[, c("gene.name", "snp.name")]), ]
+
+  # Sort by significance so the top hit per region comes first
+  for_tag <- for_tag[order(for_tag$P), ]
+
+  kept <- rep(FALSE, nrow(for_tag))
+  peak_regions <- data.frame(chr = character(), start = numeric(), end = numeric())
+
+  for (i in seq_len(nrow(for_tag))) {
+    row <- for_tag[i, ]
+
+    # Named hits are always kept regardless of proximity to a peak
+    is_named <- !is.null(tag_genes) && length(tag_genes) > 0 &&
+      ((!is.na(row$gene.name) && row$gene.name %in% tag_genes) |
+         (!is.na(row$names)     && row$names     %in% tag_genes))
+
+    if (is_named) {
+      kept[i] <- TRUE
+      next
+    }
+
+    # Check if this variant falls within an already-claimed peak window
+    if (nrow(peak_regions) > 0) {
+      in_peak <- peak_regions$chr == row$CHR &
+        peak_regions$start <= row$BP &
+        peak_regions$end   >= row$BP
+      if (any(in_peak)) next  # suppressed — inside an existing peak
+    }
+
+    # This is the top hit for a new peak; claim a window around it
+    kept[i] <- TRUE
+    peak_regions <- rbind(peak_regions, data.frame(
+      chr   = row$CHR,
+      start = row$BP - peak_window,
+      end   = row$BP + peak_window
+    ))
+  }
+
+  for_tag <- for_tag[kept, , drop = FALSE]
+  if (nrow(for_tag) > 100) {
+    message(paste0("Warning: ", nrow(for_tag), "data points tagged.") )
+  }
+  for_tag
+}
 
 #' Generate a Nashville plot
 #'
@@ -476,11 +476,11 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                            sig_line1_color='black', sig_line2_color='black', draw_genes=FALSE,
                            config=data.frame(V1=NA,V2=NA,V3=NA), y_min=NA, y_max=NA, y_ticks=NA,
                            data1_direction="up", axis_breaks = FALSE, axis_break_scale = 5, ...) {
-    validate_axis_breaks <- function(axis_breaks, full.obj) {
-      if (identical(axis_breaks, FALSE) || identical(axis_breaks, "auto") || length(axis_breaks) == 0) return(invisible(NULL))
-      if (!is.numeric(axis_breaks)) {
-        stop("axis_breaks must be FALSE, 'auto', or a numeric vector of length 1 or 2", call. = FALSE)
-      }
+  validate_axis_breaks <- function(axis_breaks, full.obj) {
+    if (identical(axis_breaks, FALSE) || identical(axis_breaks, "auto") || length(axis_breaks) == 0) return(invisible(NULL))
+    if (!is.numeric(axis_breaks)) {
+      stop("axis_breaks must be FALSE, 'auto', or a numeric vector of length 1 or 2", call. = FALSE)
+    }
 
     logP_range <- range(full.obj$logP, na.rm = TRUE)
     data_min   <- logP_range[1]
@@ -533,6 +533,21 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
 
   # x bounds and name
   x_axis_name <- "Chromosome"
+  if(is.null(chr) && !is.null(zoom_gene)) {
+    hits <- map_df[!is.na(map_df$Gene) & map_df$Gene == zoom_gene, , drop = FALSE]
+    chr_candidates <- unique(chr_as_numeric(hits$CHR))
+    if (length(chr_candidates) != 1) {
+      stop(paste0(zoom_gene, " maps to zero or multiple chromosomes; please pass chr explicitly."))
+    }
+    chr <- chr_candidates
+  } else if(is.null(chr) && !is.null(zoom_ensg)) {
+    hits <- map_df[!is.na(map_df$ENSG) & map_df$ENSG == zoom_ensg, , drop = FALSE]
+    chr_candidates <- unique(chr_as_numeric(hits$CHR))
+    if (length(chr_candidates) != 1) {
+      stop(paste0(zoom_ensg, " maps to zero or multiple chromosomes; please pass chr explicitly."))
+    }
+    chr <- chr_candidates
+  }
   if(!is.null(chr)) {
     full.obj <- full.obj[which(full.obj$CHR == chr), ]
     x_axis_name <- paste0("Chromosome ",  chr, " (MB)")
@@ -563,7 +578,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                             find_y_break(full.obj[which(full.obj$datasource == 2), "logP"])))
   } else {
     axis_breaks = NULL
-      message('no break')
+    message('no break')
   }
 
   tag1 <- build_tag_subset(full.obj[which(full.obj$datasource == 1), ], tag_names1, tag_threshold1)
@@ -614,8 +629,8 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   plt <- plt + theme(panel.grid.major=element_blank(),
                      panel.grid.minor=element_blank())
   plt <- plt + ggplot2::guides(shape = "none",
-                      size = "none",
-                      colour = guide_legend(override.aes = list(size=6)))
+                               size = "none",
+                               colour = guide_legend(override.aes = list(size=6)))
   if(!is.null(sig_line1)) {
     plt <- plt + geom_hline(aes(yintercept = data1_direction * -log10(sig_line1)), color = sig_line1_color, linetype='dashed')
   }
@@ -629,17 +644,17 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     plt <- plt + scale_x_continuous(label = waiver(), breaks = waiver())
   }
   if (y_log_scale) {
-   plt <- plt + scale_y_continuous(breaks = log_breaks)
+    plt <- plt + scale_y_continuous(breaks = log_breaks)
   } else {
-   plt <- plt + scale_y_continuous(breaks=seq(y_min, y_max, break_length),
-                                   limits=c(y_min, y_max))
+    plt <- plt + scale_y_continuous(breaks=seq(y_min, y_max, break_length),
+                                    limits=c(y_min, y_max))
   }
   plt <- plt + ggrepel::geom_label_repel(data = for_tag,
                                          aes(x = absolute,
                                              y = logP,
                                              label = ifelse(datatype == "gwas",
-                                                           snp.name,
-                                                           paste0(gene.name, "-", names))))
+                                                            snp.name,
+                                                            paste0(gene.name, "-", names))))
   plt <- plt + theme(
     panel.border = element_blank(),
     axis.line = element_line(color = "black"),
@@ -681,13 +696,13 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     message(sprintf("logP range: [%g, %g]", min(full.obj$logP, na.rm=TRUE), max(full.obj$logP, na.rm=TRUE)))
 
     plt <- plt + ggbreak::scale_y_break(breaks = c(bottom_break - 0.01, bottom_break),
-                              scales = axis_break_scale,
-                              space = 0.0, symbol = "slash",
-                              expand = c(0,0))
+                                        scales = axis_break_scale,
+                                        space = 0.0, symbol = "slash",
+                                        expand = c(0,0))
     plt <- plt + ggbreak::scale_y_break(breaks = c(top_break, top_break + 0.01),
-                              scales = 1/axis_break_scale,  # should be 1?
-                              space = 0.0, symbol = "slash",
-                              expand = c(0,0))
+                                        scales = 1/axis_break_scale,  # should be 1?
+                                        space = 0.0, symbol = "slash",
+                                        expand = c(0,0))
   } else {
     stop("axis_breaks must be FALSE, or a numeric vector of length 1 or 2")
   }
@@ -726,4 +741,3 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   # }
   plt
 }
-
