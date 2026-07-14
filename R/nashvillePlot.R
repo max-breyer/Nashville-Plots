@@ -309,59 +309,49 @@ to_megabase <- function(df) {
   df
 }
 
-find_y_break <- function(log10p_vals,
-                         direction        = 1,            # 1 for "up" data, -1 for "down" data
-                         sig_threshold    = -log10(5e-8),  # ~7.3
-                         min_gap          = 1,             # minimum gap size to bother breaking
-                         max_outlier_frac = 0.10) {         # never isolate more than this fraction of hits
-
-  # logP for a "down" dataset is uniformly negative, so comparing directly
-  # against a positive sig_threshold would find zero hits. Flip into
-  # "positive-going magnitude" space using the dataset's own direction so the
-  # same logic works for both up- and down-plotted data.
-  vals <- direction * log10p_vals
-  sig_vals <- sort(vals[vals > sig_threshold])
-  n <- length(sig_vals)
-
-  if (n < 2) {
-    message("Too few significant hits to determine a break.")
-    return(NULL)
-  }
-
-  # Search for the largest gap, but only within the extreme tail: a break
-  # should shrink a handful of far-outlying points, not slice through the
-  # bulk of the significant hits. Capping outliers out of consideration
-  # entirely (as opposed to just restricting where we search) would prevent
-  # ever detecting the gap that isolates them, so we restrict the search
-  # window instead of discarding data.
-  gaps <- diff(sig_vals)
-  max_outliers  <- max(1, floor(n * max_outlier_frac))
-  candidate_idx <- seq(from = max(1, n - max_outliers), to = n - 1)
-
-  local_gaps <- gaps[candidate_idx]
-  best       <- which.max(local_gaps)
-  gap_idx    <- candidate_idx[best]
-  max_gap    <- gaps[gap_idx]
-
-  break_lo <- sig_vals[gap_idx]        # bottom of the break, in magnitude space
-  break_hi <- sig_vals[gap_idx + 1]    # top of the break, in magnitude space
-
-  if (max_gap < min_gap) {
-    message(sprintf(
-      "Largest gap near the tail is %.1f (below min_gap = %g); no break applied.",
-      max_gap, min_gap
-    ))
-    return(NULL)
-  }
-  message(sprintf(
-    "Break placed between %.1f and %.1f (gap = %.1f -log10 units), isolating %d/%d hits",
-    break_lo, break_hi, max_gap, n - gap_idx, n
-  ))
-
-  # Convert back out of magnitude space and re-sort, since flipping the sign
-  # for "down" data reverses the numeric order of break_lo/break_hi.
-  as.list(sort(direction * c(break_lo, break_hi)))
-}
+# find_y_break <- function(log10p_vals,
+#                          direction        = 1,            # 1 for "up" data, -1 for "down" data
+#                          sig_threshold    = -log10(5e-8),  # ~7.3
+#                          min_gap          = 1,             # minimum gap size to bother breaking
+#                          max_outlier_frac = 0.10) {         # never isolate more than this fraction of hits
+#
+#   vals <- direction * log10p_vals
+#   sig_vals <- sort(vals[vals > sig_threshold])
+#   n <- length(sig_vals)
+#
+#   if (n < 2) {
+#     message("Too few significant hits to determine a break.")
+#     return(NULL)
+#   }
+#
+#   gaps <- diff(sig_vals)
+#   max_outliers  <- max(1, floor(n * max_outlier_frac))
+#   candidate_idx <- seq(from = max(1, n - max_outliers), to = n - 1)
+#
+#   local_gaps <- gaps[candidate_idx]
+#   best       <- which.max(local_gaps)
+#   gap_idx    <- candidate_idx[best]
+#   max_gap    <- gaps[gap_idx]
+#
+#   break_lo <- sig_vals[gap_idx]        # bottom of the break, in magnitude space
+#   break_hi <- sig_vals[gap_idx + 1]    # top of the break, in magnitude space
+#
+#   if (max_gap < min_gap) {
+#     message(sprintf(
+#       "Largest gap near the tail is %.1f (below min_gap = %g); no break applied.",
+#       max_gap, min_gap
+#     ))
+#     return(NULL)
+#   }
+#   message(sprintf(
+#     "Break placed between %.1f and %.1f (gap = %.1f -log10 units), isolating %d/%d hits",
+#     break_lo, break_hi, max_gap, n - gap_idx, n
+#   ))
+#
+#   # Convert back out of magnitude space and re-sort, since flipping the sign
+#   # for "down" data reverses the numeric order of break_lo/break_hi.
+#   as.list(sort(direction * c(break_lo, break_hi)))
+# }
 
 #' Build a tag subset for one data source
 #'
@@ -582,30 +572,49 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   axis_set <- aggregate(full.obj$absolute, by = list(full.obj[["CHR"]]), mean)
   names(axis_set) <- c("CHR", "center")
 
-  #### handle breaks here
+  ### simple axis breaks try
   if(is.numeric(axis_breaks)) {
-    message("using manual breaks")
+    cat("using manual breaks")
   } else if(identical(axis_breaks, 'auto')) {
-    #axis_breaks <- unlist(c(find_y_break(full.obj[which(full.obj$datasource == 1), "logP"], direction = data1_direction),
-    #                        find_y_break(full.obj[which(full.obj$datasource == 2), "logP"], direction = data2_direction)))
-    b1 <- find_y_break(full.obj[which(full.obj$datasource == 1), "logP"])
-    b2 <- if (!is.null(data2)) find_y_break(full.obj[which(full.obj$datasource == 2), "logP"]) else NULL
-    all_breaks <- unlist(c(b1, b2))
-
-    if (is.null(all_breaks) || length(all_breaks) == 0) {
-      axis_breaks <- FALSE
-      message('no break')
-    } else if (length(all_breaks) <= 2) {
-      axis_breaks <- all_breaks
-    } else {
-      # more than one candidate pair found (e.g. both datasets had gaps) —
-      # collapse to a single bottom/top break spanning all of them
-      axis_breaks <- c(min(all_breaks), max(all_breaks))
+    axis_breaks <- c()
+    if(min(full.obj$logP) < -30) {
+      axis_breaks <- append(axis_breaks, -30)
     }
+    if(max(full.obj$logP) > 30) {
+      axis_breaks <- append(axis_breaks, 30)
+    }
+    cat('using auto breaks: ', axis_breaks, "\n")
   } else {
     axis_breaks = NULL
-    message('no break')
+    cat('no break')
   }
+
+
+
+  #### handle breaks here
+  # if(is.numeric(axis_breaks)) {
+  #   message("using manual breaks")
+  # } else if(identical(axis_breaks, 'auto')) {
+  #   #axis_breaks <- unlist(c(find_y_break(full.obj[which(full.obj$datasource == 1), "logP"], direction = data1_direction),
+  #   #                        find_y_break(full.obj[which(full.obj$datasource == 2), "logP"], direction = data2_direction)))
+  #   b1 <- find_y_break(full.obj[which(full.obj$datasource == 1), "logP"])
+  #   b2 <- if (!is.null(data2)) find_y_break(full.obj[which(full.obj$datasource == 2), "logP"]) else NULL
+  #   all_breaks <- unlist(c(b1, b2))
+  #
+  #   if (is.null(all_breaks) || length(all_breaks) == 0) {
+  #     axis_breaks <- FALSE
+  #     message('no break')
+  #   } else if (length(all_breaks) <= 2) {
+  #     axis_breaks <- all_breaks
+  #   } else {
+  #     # more than one candidate pair found (e.g. both datasets had gaps) —
+  #     # collapse to a single bottom/top break spanning all of them
+  #     axis_breaks <- c(min(all_breaks), max(all_breaks))
+  #   }
+  # } else {
+  #   axis_breaks = NULL
+  #   message('no break')
+  # }
 
   tag1 <- build_tag_subset(full.obj[which(full.obj$datasource == 1), ], tag_names1, tag_threshold1)
   tag2 <- build_tag_subset(full.obj[which(full.obj$datasource == 2), ], tag_names2, tag_threshold2)
@@ -613,8 +622,14 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   for_tag <- rbind(tag1, tag2)
 
   # y tick marks
-  if(is.na(y_min) == TRUE) {y_min <- round(min(full.obj$logP, na.rm=TRUE) - 1)}
-  if(is.na(y_max) == TRUE) {y_max <- round(max(full.obj$logP, na.rm=TRUE) + 1)}
+  ymax_pad <- 1
+  ymin_pad <- 1
+  if(is.null(data2)) {
+    ifelse(data1_direction == 1, ymin_pad <- 0, ymax_pad <- 0)
+  }
+
+  if(is.na(y_min) == TRUE) {y_min <- round(min(full.obj$logP, na.rm=TRUE) - 1*ymin_pad)} # pad only in data direction
+  if(is.na(y_max) == TRUE) {y_max <- round(max(full.obj$logP, na.rm=TRUE) + 1*ymax_pad)} # pad only in data direction
   y_range <- y_max - y_min
 
   signed_log <- function(x) sign(x) * log1p(abs(x))
@@ -693,7 +708,6 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   # axis_break_scale: user-supplied scale factor (default should be 5 in function signature)
   if (identical(axis_breaks, FALSE) || length(axis_breaks) == 0) {
     # no breaks — nothing to do
-
   } else if (length(axis_breaks) == 1) {
     # single break
     # below 0 → bottom segment compressed, use scale as-is
