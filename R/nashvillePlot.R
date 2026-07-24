@@ -509,6 +509,26 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                    "37" = {map_df = gene.build.37},
                    "38" = {map_df = gene.build.38},
                    stop("map_df must be '37' or '38'"))
+  infer_chr_from_map <- function(id, id_col) {
+    hits <- map_df[!is.na(map_df[[id_col]]) & map_df[[id_col]] == id, , drop = FALSE]
+    if (nrow(hits) == 0) {
+      (paste0(id, " not found in map_df; cannot infer chromosome. ",
+              "Pass `chr` explicitly."))
+    }
+    chrs <- unique(chr_as_numeric(hits$CHR))
+    if (length(chrs) > 1) {
+      stop(paste0(id, " maps to multiple chromosomes (", paste(chrs, collapse=", "),
+                  "); pass `chr` explicitly to disambiguate."))
+    }
+    chrs[1]
+  }
+  if (is.null(chr) && !is.null(zoom_gene)) {
+    chr <- infer_chr_from_map(zoom_gene, "Gene")
+    message(paste0("chr not specified; inferred chr = ", chr, " from zoom_gene = '", zoom_gene, "'"))
+  }else if (is.null(chr) && !is.null(zoom_ensg)) {
+    chr <- infer_chr_from_map(zoom_ensg, "ENSG")
+    message(paste0("chr not specified; inferred chr = ", chr, " from zoom_ensg = '", zoom_ensg, "'"))
+  }
   data1$datasource <- 1
   if (!is.null(data2)) { data2$datasource <- 2 }
   full.obj <- rbind(data1, data2)
