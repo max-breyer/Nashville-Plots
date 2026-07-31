@@ -575,12 +575,12 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     x_axis_name <- paste0("Chromosome ",  chr, " (MB)")
     if(!is.null(zoom_gene)) {
       bounds <- get_gene_bounds(zoom_gene, map_df, chr)
-      bounds[1] <- bounds[1] - 100000
-      bounds[2] <- bounds[2] + 100000
+      bounds[1] <- bounds[1] - 250000
+      bounds[2] <- bounds[2] + 250000
     } else if(!is.null(zoom_ensg)) {
       bounds <- get_gene_bounds_ensg(zoom_ensg, map_df, chr)
-      bounds[1] <- bounds[1] - 100000
-      bounds[2] <- bounds[2] + 100000
+      bounds[1] <- bounds[1] - 250000
+      bounds[2] <- bounds[2] + 250000
     } else if(zoom_right != 0) {
       bounds <- c(zoom_left, zoom_right)
     } else {
@@ -608,33 +608,6 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     axis_breaks = NULL
     cat('no break')
   }
-
-
-
-  #### handle breaks here
-  # if(is.numeric(axis_breaks)) {
-  #   message("using manual breaks")
-  # } else if(identical(axis_breaks, 'auto')) {
-  #   #axis_breaks <- unlist(c(find_y_break(full.obj[which(full.obj$datasource == 1), "logP"], direction = data1_direction),
-  #   #                        find_y_break(full.obj[which(full.obj$datasource == 2), "logP"], direction = data2_direction)))
-  #   b1 <- find_y_break(full.obj[which(full.obj$datasource == 1), "logP"])
-  #   b2 <- if (!is.null(data2)) find_y_break(full.obj[which(full.obj$datasource == 2), "logP"]) else NULL
-  #   all_breaks <- unlist(c(b1, b2))
-  #
-  #   if (is.null(all_breaks) || length(all_breaks) == 0) {
-  #     axis_breaks <- FALSE
-  #     message('no break')
-  #   } else if (length(all_breaks) <= 2) {
-  #     axis_breaks <- all_breaks
-  #   } else {
-  #     # more than one candidate pair found (e.g. both datasets had gaps) —
-  #     # collapse to a single bottom/top break spanning all of them
-  #     axis_breaks <- c(min(all_breaks), max(all_breaks))
-  #   }
-  # } else {
-  #   axis_breaks = NULL
-  #   message('no break')
-  # }
 
   tag1 <- build_tag_subset(full.obj[which(full.obj$datasource == 1), ], tag_names1, tag_threshold1)
   tag2 <- build_tag_subset(full.obj[which(full.obj$datasource == 2), ], tag_names2, tag_threshold2)
@@ -677,11 +650,21 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
   plt <- plt + plot.mh(data = full.obj[which(full.obj$datasource == 2), ],
                        direction = data2_direction,
                        draw_genes=draw_genes)
-  plt <- plt + scale_color_identity("Tissue", guide = "legend",
+  only_gwas <- all(full.obj$datatype == "gwas", na.rm = TRUE)
+  plt <- plt + scale_color_identity("Tissue", guide = if (only_gwas) "none" else "legend",
                                     labels = full.obj$name,
                                     breaks = full.obj$color)
   plt <- plt + xlab(x_axis_name)
-  plt <- plt + ylab(expression(log["10"]*italic((p))~"&"~-log["10"]*italic((p))))
+  has_neg_logP <- any(full.obj$logP < 0, na.rm = TRUE)
+  has_pos_logP <- any(full.obj$logP > 0, na.rm = TRUE)
+  y_axis_label <- if (has_neg_logP && has_pos_logP) {
+    expression(log["10"]*italic((p))~"&"~-log["10"]*italic((p)))
+  } else if (has_neg_logP) {
+    expression(log["10"]*italic((p)))
+  } else {
+    expression(-log["10"]*italic((p)))
+  }
+  plt <- plt + ylab(y_axis_label)
   plt <- plt + theme(axis.text.x=element_text(color='black'),
                      axis.text.y=element_text(color='black'),
                      axis.title.x=element_text(face="bold", color="black"),
@@ -691,7 +674,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
                      panel.grid.minor=element_blank())
   plt <- plt + ggplot2::guides(shape = "none",
                                size = "none",
-                               colour = guide_legend(override.aes = list(size=6)))
+                               colour = if (only_gwas) "none" else guide_legend(override.aes = list(size=6)))
   if(!is.null(sig_line1)) {
     plt <- plt + geom_hline(aes(yintercept = data1_direction * -log10(sig_line1)), color = sig_line1_color, linetype='dashed')
   }
