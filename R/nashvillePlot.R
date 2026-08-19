@@ -688,7 +688,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
     plt <- plt + scale_x_continuous(label = waiver(), breaks = waiver())
   }
   if (y_log_scale) {
-    plt <- plt + scale_y_continuous(breaks = log_breaks)
+    plt <- plt + scale_y_continuous(breaks = log_breaks, limits = c(y_min, y_max))
   } else {
     plt <- plt + scale_y_continuous(breaks=seq(y_min, y_max, break_length),
                                     limits=c(y_min, y_max))
