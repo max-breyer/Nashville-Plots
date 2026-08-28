@@ -526,3 +526,209 @@ test_that("nashville.plot() renders scale_y_continuous when not using log scale"
                        axis_breaks = FALSE)
   expect_s3_class(plt, "gg")
 })
+
+# Tests for build_tag_subset() / parse_tag_spec() 
+make_obj <- function(gene.name, names, group, CHR, BP, P, snp.name = NA_character_) {
+  data.frame(
+    gene.name = gene.name,
+    names     = names,
+    group     = group,
+    CHR       = CHR,
+    BP        = BP,
+    P         = P,
+    snp.name  = snp.name,
+    stringsAsFactors = FALSE
+  )
+}
+
+# --- parse_tag_spec() --------------------------------------------------------
+
+test_that("parse_tag_spec treats a plain character vector as all-plain names", {
+  spec <- parse_tag_spec(c("BRCA1", "TP53"))
+  expect_setequal(spec$plain, c("BRCA1", "TP53"))
+  expect_length(spec$tuple_gene, 0)
+})
+
+test_that("parse_tag_spec splits a list into plain names and gene/tissue tuples", {
+  spec <- parse_tag_spec(list("TP53", c("BRCA1", "Liver"), c("BRCA1", "Muscle")))
+  expect_equal(spec$plain, "TP53")
+  expect_equal(spec$tuple_gene, c("BRCA1", "BRCA1"))
+  expect_equal(spec$tuple_tissue, c("Liver", "Muscle"))
+})
+
+test_that("parse_tag_spec errors on a tuple of the wrong length", {
+  expect_error(parse_tag_spec(list(c("BRCA1", "Liver", "extra"))), "length 2")
+})
+
+test_that("parse_tag_spec handles NULL/empty input", {
+  spec <- parse_tag_spec(NULL)
+  expect_length(spec$plain, 0)
+  expect_length(spec$tuple_gene, 0)
+})
+
+# --- build_tag_subset(): legacy / plain-name behavior is unchanged ----------
+
+test_that("threshold tagging (no names given) still collapses a gene to its single most extreme tissue", {
+  obj <- make_obj(
+    gene.name = c("BRCA1", "BRCA1", "BRCA1", "TP53"),
+    names     = c("Adipose", "Liver", "Muscle", "Adipose"),
+    group     = c("Adipose", "Liver", "Muscle", "Adipose"),
+    CHR       = c(17, 17, 17, 17),
+    BP        = c(43100000, 43100000, 43100000, 7600000),
+    P         = c(1e-10, 1e-8, 1e-6, 1e-5)
+  )
+
+  res <- build_tag_subset(obj, tag_genes = NULL, gene_tag = 1e-4)
+
+  brca1_rows <- res[res$gene.name == "BRCA1", ]
+  expect_equal(nrow(brca1_rows), 1)
+  expect_equal(brca1_rows$group, "Adipose")   # most significant
+  expect_equal(nrow(res), 2)
+})
+
+test_that("plain-name tagging still collapses a gene to its single most extreme tissue", {
+  obj <- make_obj(
+    gene.name = c("BRCA1", "BRCA1", "BRCA1"),
+    names     = c("Adipose", "Liver", "Muscle"),
+    group     = c("Adipose", "Liver", "Muscle"),
+    CHR       = c(17, 17, 17),
+    BP        = c(43100000, 43100000, 43100000),
+    P         = c(1e-8, 1e-10, 0.9)  # Liver is most significant here
+  )
+
+  res <- build_tag_subset(obj, tag_genes = "BRCA1", gene_tag = NA)
+
+  expect_equal(nrow(res), 1)
+  expect_equal(res$group, "Liver")
+})
+
+test_that("peak suppression is still global (not per-tissue) for automatic hits", {
+  # Same locus, two different tissues, neither explicitly named -> only the
+  # more significant one survives, exactly like the original behavior.
+  obj <- make_obj(
+    gene.name = c("BRCA1", "BRCA1"),
+    names     = c("Liver", "Muscle"),
+    group     = c("Liver", "Muscle"),
+    CHR       = c(17, 17),
+    BP        = c(43100000, 43100000),
+    P         = c(1e-9, 1e-7)
+  )
+
+  res <- build_tag_subset(obj, tag_genes = NULL, gene_tag = 1e-4, peak_window = 500000)
+
+  expect_equal(nrow(res), 1)
+  expect_equal(res$group, "Liver")
+})
+
+test_that("peak suppression still declutters nearby genes in the same tissue", {
+  obj <- make_obj(
+    gene.name = c("GENE_A", "GENE_B"),
+    names     = c("Liver", "Liver"),
+    group     = c("Liver", "Liver"),
+    CHR       = c(1, 1),
+    BP        = c(1000000, 1000100),
+    P         = c(1e-9, 1e-7)
+  )
+
+  res <- build_tag_subset(obj, tag_genes = NULL, gene_tag = 1e-4, peak_window = 500000)
+
+  expect_equal(nrow(res), 1)
+  expect_equal(res$gene.name, "GENE_A")
+})
+
+# --- build_tag_subset(): tuple-based multi-tissue tagging ---------------
+
+test_that("gene/tissue tuples tag a gene in exactly the requested tissues", {
+  obj <- make_obj(
+    gene.name = c("BRCA1", "BRCA1", "BRCA1"),
+    names     = c("Adipose", "Liver", "Muscle"),
+    group     = c("Adipose", "Liver", "Muscle"),
+    CHR       = c(17, 17, 17),
+    BP        = c(43100000, 43100000, 43100000),
+    P         = c(0.5, 0.4, 0.3)  # none significant, purely name-driven
+  )
+
+  res <- build_tag_subset(
+    obj,
+    tag_genes = list(c("BRCA1", "Liver"), c("BRCA1", "Muscle")),
+    gene_tag = NA
+  )
+
+  expect_equal(nrow(res), 2)
+  expect_setequal(res$group, c("Liver", "Muscle"))
+  expect_false("Adipose" %in% res$group)
+})
+
+test_that("tuples bypass peak suppression even at the same locus", {
+  obj <- make_obj(
+    gene.name = c("BRCA1", "BRCA1", "BRCA1"),
+    names     = c("Adipose", "Liver", "Muscle"),
+    group     = c("Adipose", "Liver", "Muscle"),
+    CHR       = c(17, 17, 17),
+    BP        = c(43100000, 43100000, 43100000),  # identical position
+    P         = c(1e-9, 1e-7, 1e-5)
+  )
+
+  res <- build_tag_subset(
+    obj,
+    tag_genes = list(c("BRCA1", "Adipose"), c("BRCA1", "Liver"), c("BRCA1", "Muscle")),
+    gene_tag = NA,
+    peak_window = 500000
+  )
+
+  expect_equal(nrow(res), 3)
+  expect_setequal(res$group, c("Adipose", "Liver", "Muscle"))
+})
+
+test_that("mixing a plain name with tuples: plain still collapses, tuples still uniquely survive", {
+  obj <- make_obj(
+    gene.name = c("BRCA1", "BRCA1", "BRCA1", "TP53"),
+    names     = c("Adipose", "Liver", "Muscle", "Adipose"),
+    group     = c("Adipose", "Liver", "Muscle", "Adipose"),
+    CHR       = c(17, 17, 17, 17),
+    BP        = c(43100000, 43100000, 43100000, 7600000),
+    P         = c(1e-9, 1e-7, 1e-5, 1e-3)
+  )
+
+  res <- build_tag_subset(
+    obj,
+    tag_genes = list("TP53", c("BRCA1", "Muscle")),
+    gene_tag = NA
+  )
+
+  # TP53 (plain) -> its single (only) row is kept
+  expect_true("TP53" %in% res$gene.name)
+  # BRCA1 Muscle (tuple) -> uniquely kept even though Adipose is more significant
+  brca1_rows <- res[res$gene.name == "BRCA1", ]
+  expect_equal(nrow(brca1_rows), 1)
+  expect_equal(brca1_rows$group, "Muscle")
+})
+
+test_that("a tuple targeting a tissue where the gene isn't present matches nothing", {
+  obj <- make_obj(
+    gene.name = c("BRCA1", "BRCA1"),
+    names     = c("Adipose", "Liver"),
+    group     = c("Adipose", "Liver"),
+    CHR       = c(17, 17),
+    BP        = c(43100000, 43100000),
+    P         = c(0.5, 0.4)
+  )
+
+  res <- build_tag_subset(obj, tag_genes = list(c("BRCA1", "Muscle")), gene_tag = NA)
+  expect_equal(nrow(res), 0)
+})
+
+test_that("duplicate tuples for the same gene/tissue collapse to one row", {
+  obj <- make_obj(
+    gene.name = c("BRCA1", "BRCA1"),
+    names     = c("Liver", "Liver"),
+    group     = c("Liver", "Liver"),
+    CHR       = c(17, 17),
+    BP        = c(43100000, 43100000),
+    P         = c(1e-9, 1e-2)
+  )
+
+  res <- build_tag_subset(obj, tag_genes = list(c("BRCA1", "Liver")), gene_tag = NA)
+  expect_equal(nrow(res), 1)
+  expect_equal(res$P, 1e-9)
+})
