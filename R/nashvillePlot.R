@@ -353,14 +353,68 @@ to_megabase <- function(df) {
 #   as.list(sort(direction * c(break_lo, break_hi)))
 # }
 
+#' Parse a tag specification into plain names and gene/tissue tuples
+#'
+#' `tag_genes`/`tag_names1`/`tag_names2` can be supplied two ways:
+#'  \itemize{
+#'    \item a plain character vector, e.g. \code{c("BRCA1", "TP53")}. Each
+#'      element is treated as an unqualified gene (or SNP/group) name
+#'      if the same gene appears in multiple tissues, all of its
+#'      rows are eligible to be tagged, but they're still subject to the usual
+#'      per-gene/per-peak collapsing (see \code{\link{build_tag_subset}}).
+#'    \item a \code{list} whose elements are either a single name (character
+#'      scalar, same as above) or a length-2 character vector
+#'      \code{c(gene_name, tissue_name)} that uniquely identifies one
+#'      tissue's point for that gene, e.g.
+#'      \code{list("TP53", c("BRCA1", "Liver"), c("BRCA1", "Muscle"))}.
+#'      Tuple-specified entries are exempted from the per-gene collapsing, so
+#'      this is how to force a gene to be tagged in more than one tissue.
+#'  }
+#' @param tag_genes see above
+parse_tag_spec <- function(tag_genes) {
+  plain <- character(0)
+  tuple_gene <- character(0)
+  tuple_tissue <- character(0)
+
+  if (is.null(tag_genes) || length(tag_genes) == 0) {
+    return(list(plain = plain, tuple_gene = tuple_gene, tuple_tissue = tuple_tissue))
+  }
+
+  if (is.list(tag_genes)) {
+    for (item in tag_genes) {
+      item <- as.character(item)
+      if (length(item) == 1) {
+        plain <- c(plain, item)
+      } else if (length(item) == 2) {
+        tuple_gene <- c(tuple_gene, item[1])
+        tuple_tissue <- c(tuple_tissue, item[2])
+      } else {
+        stop("Each tag_genes/tag_names element must be a single name, or a gene/tissue pair of length 2.")
+      }
+    }
+  } else {
+    # plain atomic vector: every element is a standalone gene/name
+    plain <- as.character(tag_genes)
+  }
+
+  list(plain = plain, tuple_gene = tuple_gene, tuple_tissue = tuple_tissue)
+}
+
 #' Build a tag subset for one data source
 #'
 #' @param obj subset of full.obj belonging to a single datasource
-#' @param tag_genes character vector of gene names (matched against obj$gene.name)
-#'   or SNP/group names (matched against obj$names) to force-tag
+#' @param tag_genes gene/tissue tag specification; see \code{\link{parse_tag_spec}}
+#'   for the accepted formats. Matched against \code{obj$gene.name} (plain
+#'   entries) or, for a tuple, against \code{obj$gene.name} together with
+#'   \code{obj$group} (the tissue/dataset a row came from); plain entries also
+#'   match against \code{obj$names} (SNP/group names for GWAS data).
 #' @param gene_tag numeric P-value threshold; rows with P < gene_tag are tagged
-#' @param peak_window x range to be considered a "peak". Only 1 point will be labeled for
-#'  crossing the threshold in each peak window.
+#' @param peak_window x range to be considered a "peak". Only 1 point is labeled
+#'   per peak window, regardless of tissue. 
+#'   To force a gene to be labeled in more than one tissue 
+#'   (even at/near the same peak), pass explicit \code{c(gene_name, tissue_name)} 
+#'   tuples in \code{tag_genes}; tuple-specified points always bypass peak 
+#'   suppression, each uniquely identified by its own gene+tissue pair.
 build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
 
   if (nrow(obj) == 0) return(obj[0, , drop = FALSE])
@@ -368,12 +422,25 @@ build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
   has_gene <- !is.na(obj$gene.name)
   has_name <- !is.na(obj$names)
 
-  # rows matching user-supplied list of items to tag
-  list_hit <- rep(FALSE, nrow(obj))
-  if (!is.null(tag_genes) && length(tag_genes) > 0) {
-    list_hit <- (has_gene & obj$gene.name %in% tag_genes) |
-      (has_name & obj$names %in% tag_genes)
+  spec <- parse_tag_spec(tag_genes)
+  has_tags <- length(spec$plain) > 0 || length(spec$tuple_gene) > 0
+  tuple_key_spec <- paste(spec$tuple_gene, spec$tuple_tissue, sep = "\r")
+
+  # rows matching a plain (tissue-agnostic) name
+  list_hit_plain <- rep(FALSE, nrow(obj))
+  if (length(spec$plain) > 0) {
+    list_hit_plain <- (has_gene & obj$gene.name %in% spec$plain) |
+      (has_name & obj$names %in% spec$plain)
   }
+
+  # rows matching an explicit (gene, tissue) tuple
+  list_hit_tuple <- rep(FALSE, nrow(obj))
+  if (length(spec$tuple_gene) > 0) {
+    obj_key <- paste(obj$gene.name, obj$group, sep = "\r")
+    list_hit_tuple <- has_gene & obj_key %in% tuple_key_spec
+  }
+
+  list_hit <- list_hit_plain | list_hit_tuple
 
   # rows exceeding the significance threshold
   thresh_hit <- rep(FALSE, nrow(obj))
@@ -383,12 +450,24 @@ build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
 
   keep <- list_hit | thresh_hit
   for_tag <- obj[keep, , drop = FALSE]
+  tuple_flag <- list_hit_tuple[keep]
 
   if (nrow(for_tag) == 0) return(for_tag)
 
-  # order so the most significant hit per gene is kept first, then dedupe
-  for_tag <- for_tag[order(for_tag$gene.name, -log(for_tag$P, 10), decreasing = TRUE), ]
-  for_tag <- for_tag[!duplicated(for_tag[, c("gene.name", "snp.name")]), ]
+  # De-duplication: rows uniquely identified via a (gene, tissue) tuple keep
+  # one row PER tissue (their dedup key includes `group`). 
+  tuple_rows     <- for_tag[tuple_flag, , drop = FALSE]
+  non_tuple_rows <- for_tag[!tuple_flag, , drop = FALSE]
+
+  if (nrow(non_tuple_rows) > 0) {
+    non_tuple_rows <- non_tuple_rows[order(non_tuple_rows$gene.name, -log(non_tuple_rows$P, 10), decreasing = TRUE), ]
+    non_tuple_rows <- non_tuple_rows[!duplicated(non_tuple_rows[, c("gene.name", "snp.name")]), ]
+  }
+  if (nrow(tuple_rows) > 0) {
+    tuple_rows <- tuple_rows[order(tuple_rows$gene.name, tuple_rows$group, -log(tuple_rows$P, 10), decreasing = TRUE), ]
+    tuple_rows <- tuple_rows[!duplicated(tuple_rows[, c("gene.name", "group", "snp.name")]), ]
+  }
+  for_tag <- rbind(non_tuple_rows, tuple_rows)
 
   # Sort by significance so the top hit per region comes first
   for_tag <- for_tag[order(for_tag$P), ]
@@ -400,9 +479,11 @@ build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
     row <- for_tag[i, ]
 
     # Named hits are always kept regardless of proximity to a peak
-    is_named <- !is.null(tag_genes) && length(tag_genes) > 0 &&
-      ((!is.na(row$gene.name) && row$gene.name %in% tag_genes) |
-         (!is.na(row$names)     && row$names     %in% tag_genes))
+    is_named <- has_tags &&
+      (((!is.na(row$gene.name) && row$gene.name %in% spec$plain) |
+          (!is.na(row$names)     && row$names     %in% spec$plain)) ||
+         (!is.na(row$gene.name) &&
+            paste(row$gene.name, row$group, sep = "\r") %in% tuple_key_spec))
 
     if (is_named) {
       kept[i] <- TRUE
@@ -445,14 +526,21 @@ build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
 #' @param zoom_gene: if `chr` is set this will graph around the gene described by name
 #' @param zoom_left: if `chr` is set this will graph points to the right of this base pair number
 #' @param zoom_right: if `chr` is set this will graph points to the left of this base pair number
-#' @param tag_names1 character vector of gene names (or group/tissue names for GWAS SNPs)
-#'     in data1 to label on the plot, regardless of significance
-#' @param tag_names2 character vector of gene names (or group/tissue names for GWAS SNPs)
-#'     in data2 to label on the plot, regardless of significance
+#' @param tag_names1 gene/tissue tag specification for data1: either a plain character
+#'     vector of gene names (or group/tissue names for GWAS SNPs) to label on the plot
+#'     regardless of significance, or a \code{list} mixing plain names with explicit
+#'     \code{c(gene_name, tissue_name)} tuples, e.g.
+#'     \code{list("TP53", c("BRCA1", "Liver"), c("BRCA1", "Muscle"))}. A plain name
+#'     tags that gene's single most significant point. a tuple
+#'     uniquely tags that gene's point in that specific tissue, which is how to label
+#'     the same gene in more than one tissue.
+#' @param tag_names2 same as \code{tag_names1}, applied to data2.
 #' @param tag_threshold1 numeric, in data1 annotate items with P-values more extreme than tag_threshold1
-#'    (default -Inf, i.e. no automatic threshold tagging)
+#'    (default -Inf, i.e. no automatic threshold tagging). Use \code{tag_names1}
+#'    tuples to label additional tissues for the same gene.
 #' @param tag_threshold2 numeric, in data2 annotate items with P-values more extreme than tag_threshold2
-#'     (default -Inf, i.e. no automatic threshold tagging)
+#'     (default -Inf, i.e. no automatic threshold tagging). Use \code{tag_names2}
+#'     tuples to label additional tissues for the same gene.
 #' @param sig_line1 numeric, draw a horizontal line at -log(sig_line1)
 #' @param sig_line2 numeric, draw a horizontal line at -log(sig_line2)
 #' @param sig_line1_color color for sig_line1
