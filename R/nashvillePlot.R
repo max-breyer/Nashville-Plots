@@ -430,7 +430,8 @@ build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
   list_hit_plain <- rep(FALSE, nrow(obj))
   if (length(spec$plain) > 0) {
     list_hit_plain <- (has_gene & obj$gene.name %in% spec$plain) |
-      (has_name & obj$names %in% spec$plain)
+      (has_name & obj$names %in% spec$plain) |
+      (!is.na(obj$snp.name) & obj$snp.name %in% spec$plain)
   }
 
   # rows matching an explicit (gene, tissue) tuple
@@ -483,7 +484,8 @@ build_tag_subset <- function(obj, tag_genes, gene_tag, peak_window = 500000) {
       (((!is.na(row$gene.name) && row$gene.name %in% spec$plain) |
           (!is.na(row$names)     && row$names     %in% spec$plain)) ||
          (!is.na(row$gene.name) &&
-            paste(row$gene.name, row$group, sep = "\r") %in% tuple_key_spec))
+            paste(row$gene.name, row$group, sep = "\r") %in% tuple_key_spec) || 
+            (!is.na(row$snp.name) && row$snp.name %in% spec$plain))
 
     if (is_named) {
       kept[i] <- TRUE
