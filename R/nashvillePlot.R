@@ -580,7 +580,7 @@ nashville.plot <- function(data1, data2=NULL, map_df="37", chr=NULL, zoom_ensg=N
 
     for (b in axis_breaks) {
       if (b <= data_min || b >= data_max) {
-        stop(sprintf(
+        cat(sprintf(
           "axis_breaks value %g is outside the data range [%g, %g].\n",
           b, data_min, data_max
         ), sprintf(
